@@ -1,5 +1,7 @@
 package org.shaderslang.wasm.diagnostics;
 
+import org.shaderslang.wasm.CompileResult;
+
 /**
  * One structured diagnostic message, as produced by parsing a {@link CompileResult#diagnostics()}
  * (or {@code SlangModule.declReflectionJson()}/etc. failure message) string via
