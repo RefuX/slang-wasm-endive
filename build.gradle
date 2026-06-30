@@ -24,7 +24,9 @@ repositories {
 // etc.), and the tests load it at run time. It is produced by the CMake build
 // (cmake --build --preset slang-wasm-lib). Override the location with
 // -Pslang.wasm.path=... or the SLANG_WASM_PATH environment variable.
-def wasmFile = file("${rootProject.projectDir}/slang-wasm-lib.wasm")
+def wasmFile = file(project.findProperty('slang.wasm.path')
+        ?: System.getenv('SLANG_WASM_PATH')
+        ?: "${rootProject.projectDir}/slang-wasm-lib.wasm")
 
 // Stage only slang-wasm-lib.wasm into its own directory so the annotation
 // processor path holds just that one file. Pointing the processor path at the

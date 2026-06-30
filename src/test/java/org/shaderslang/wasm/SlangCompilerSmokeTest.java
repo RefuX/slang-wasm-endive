@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class SlangCompilerSmokeTest {
 
-    private static Path wasmPath = Path.of("slang-wasm-lib.wasm");
+    private static Path wasmPath;
 
     /**
      * One runtime-compiled instance shared by the whole suite. Loading the
@@ -54,6 +54,8 @@ class SlangCompilerSmokeTest {
 
     @BeforeAll
     static void locateWasm() throws IOException {
+        String raw = System.getProperty("slang.wasm.path", "");
+        wasmPath = Path.of(raw.isEmpty() ? "slang-wasm-lib.wasm" : raw);
         Assumptions.assumeTrue(
                 Files.exists(wasmPath),
                 "slang-wasm-lib.wasm not found at " + wasmPath.toAbsolutePath()
