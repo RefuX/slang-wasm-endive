@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$PROJECT_DIR$/build/wasm-annotation-processor" />
+          <entry name="$MAVEN_REPOSITORY$/run/endive/annotations-processor/999-SNAPSHOT/annotations-processor-999-SNAPSHOT.jar" />
+          <entry name="$MAVEN_REPOSITORY$/run/endive/codegen/999-SNAPSHOT/codegen-999-SNAPSHOT.jar" />
+          <entry name="$MAVEN_REPOSITORY$/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.jar" />
+          <entry name="$MAVEN_REPOSITORY$/run/endive/annotations/999-SNAPSHOT/annotations-999-SNAPSHOT.jar" />
+          <entry name="$MAVEN_REPOSITORY$/run/endive/wasm/999-SNAPSHOT/wasm-999-SNAPSHOT.jar" />
+        </processorPath>
+        <module name="slang-wasm-lib.main" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel target="11" />
+  </component>
+</project>
