@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.shaderslang.wasm.diagnostics.Diagnostic;
 import org.shaderslang.wasm.diagnostics.DiagnosticList;
 import org.shaderslang.wasm.enums.CompilerOptionName;
@@ -16,6 +17,9 @@ import org.shaderslang.wasm.reflection.EntryPointReflection;
 import org.shaderslang.wasm.reflection.ShaderReflection;
 import org.shaderslang.wasm.reflection.TypeLayoutReflection;
 import org.shaderslang.wasm.reflection.VariableLayoutReflection;
+
+import run.endive.compiler.Cache;
+import run.endive.experimental.dircache.DirectoryCache;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -615,6 +619,77 @@ class SlangCompilerSmokeTest {
             String ver = slang.version();
             assertFalse(ver.isEmpty(), "Expected a non-empty version string");
             System.out.println("slang-wasm-lib version: " + ver);
+        }
+    }
+
+    @Test
+    void cacheDirSkipsRecompilationAndIsSharedAcrossBothBuilders(@TempDir Path cacheDir)
+            throws Exception {
+        var cache = new CountingCache(new DirectoryCache(cacheDir));
+
+        try (var runtime = SlangRuntime.builder(wasmPath)
+                .withRuntimeCompiler(true)
+                .withCache(cache)
+                .build();
+             var slang = runtime.forSpirv()) {
+            assertEquals(0, cache.hits, "No cache hit at first I hope");
+            assertEquals(1, cache.misses, "Expected the first build to miss the empty cache");
+            assertEquals(1, cache.puts, "Expected the first build to populate the cache");
+
+            CompileResult result = slang.compile("cache-first", TRIVIAL_SHADER, "main");
+            assertTrue(result.succeeded(),
+                    "Expected compilation to succeed on the cache-populating build. Diagnostics:\n"
+                    + result.diagnostics());
+
+            // A second build against the same cache should load the compiled bytecode
+            // straight from it rather than recompiling.
+            try (var cached = SlangCompiler.builder()
+                    .wasm(wasmPath)
+                    .target(Target.SPIRV)
+                    .runtimeCompiler(true)
+                    .cache(cache)
+                    .build()) {
+                assertEquals(1, cache.hits, "Expected the second build to hit the cache");
+                assertEquals(1, cache.misses, "Expected the second build to skip recompilation");
+                assertEquals(1, cache.puts,
+                        "Expected the second build to skip recompilation and not write to the "
+                        + "cache again");
+
+                CompileResult cachedResult = cached.compile("cache-second", TRIVIAL_SHADER, "main");
+                assertTrue(cachedResult.succeeded(),
+                        "Expected compilation to succeed on the cache-hit build. Diagnostics:\n"
+                        + cachedResult.diagnostics());
+            }
+        }
+    }
+
+    /** Wraps a {@link Cache}, counting hits/misses/writes so tests can assert on
+     *  cache behavior directly instead of inferring it from timing. */
+    private static final class CountingCache implements Cache {
+        private final Cache delegate;
+        int hits;
+        int misses;
+        int puts;
+
+        CountingCache(Cache delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public byte[] get(String key) throws IOException {
+            byte[] value = delegate.get(key);
+            if (value == null) {
+                misses++;
+            } else {
+                hits++;
+            }
+            return value;
+        }
+
+        @Override
+        public void putIfAbsent(String key, byte[] data) throws IOException {
+            puts++;
+            delegate.putIfAbsent(key, data);
         }
     }
 }

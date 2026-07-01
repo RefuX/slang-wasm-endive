@@ -23,9 +23,6 @@
 hs_err_pid*
 replay_pid*
 
-# Generated WASM artifact (produced by the CMake build; too large for git)
-slang-wasm-lib.wasm
-
 # Gradle
 .gradle/
 build/

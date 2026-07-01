@@ -1,6 +1,8 @@
 package org.shaderslang.wasm;
 
+import run.endive.compiler.Cache;
 import run.endive.compiler.MachineFactoryCompiler;
+import run.endive.experimental.dircache.DirectoryCache;
 import run.endive.runtime.Instance;
 import run.endive.runtime.Store;
 import run.endive.wasi.WasiOptions;
@@ -42,16 +44,26 @@ import java.util.Map;
  * {@link Builder#build()} while the module is translated to JVM bytecode. A few
  * very large functions in the Slang compiler exceed what the bytecode emitter can
  * handle and are transparently left interpreted (the compiler logs a one-line
- * warning per such function); this is expected and harmless.
+ * warning per such function); this is expected and harmless, and does not affect
+ * caching below — the cached bytecode simply omits those functions too, so the
+ * interpreter fallback is reproduced exactly on a cache hit.
+ *
+ * <p><b>Disk cache.</b> {@link Builder#withCacheDir} persists the compiled JVM
+ * bytecode to disk, keyed by the WASM module's content digest. The first build
+ * pays the full JIT cost and writes the cache; subsequent builds (even in a new
+ * JVM process) load the compiled classes straight from disk and skip compilation
+ * entirely. Only meaningful together with {@link Builder#withRuntimeCompiler}.
  *
  * <p>Not thread-safe: do not share one runtime (or its sessions) across threads.
  */
 public final class SlangRuntime implements AutoCloseable {
 
     private final SlangWasm_ModuleExports wasm;
+    private final WasiPreview1 wasi;
 
-    private SlangRuntime(SlangWasm_ModuleExports wasm) {
+    private SlangRuntime(SlangWasm_ModuleExports wasm, WasiPreview1 wasi) {
         this.wasm = wasm;
+        this.wasi = wasi;
     }
 
     SlangWasm_ModuleExports wasm() {
@@ -100,19 +112,20 @@ public final class SlangRuntime implements AutoCloseable {
     }
 
     /**
-     * Release this runtime. The endive WASM runtime has no explicit teardown
-     * (the instance is reclaimed by GC once unreferenced), so this is currently
-     * a no-op; it exists so callers can manage the runtime with try-with-resources.
+     * Release this runtime. The endive WASM instance itself has no explicit
+     * teardown (it is reclaimed by GC once unreferenced); this closes the WASI
+     * layer, which owns the stdio and preopened-directory descriptors.
      */
     @Override
     public void close() {
-        // no-op: nothing to release deterministically today
+        wasi.close();
     }
 
     /** Configures and builds a {@link SlangRuntime}. */
     public static final class Builder {
         private final Path wasmPath;
         private boolean runtimeCompiler = false;
+        private Cache cache;
 
         private Builder(Path wasmPath) {
             this.wasmPath = wasmPath;
@@ -127,49 +140,39 @@ public final class SlangRuntime implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Persist the runtime compiler's output under {@code cacheDir}, keyed by the
+         * WASM module's content digest, so later builds (including in a new JVM
+         * process) can skip JIT compilation entirely. No effect unless
+         * {@link #withRuntimeCompiler} is also enabled. Sugar for {@link #withCache}
+         * with a {@link DirectoryCache} backed by {@code cacheDir}.
+         */
+        public Builder withCacheDir(Path cacheDir) {
+            return withCache(cacheDir == null ? null : new DirectoryCache(cacheDir));
+        }
+
+        /**
+         * Persist the runtime compiler's output in {@code cache}, keyed by the
+         * WASM module's content digest. No effect unless {@link #withRuntimeCompiler}
+         * is also enabled. Overrides any {@link #withCacheDir} call and vice versa —
+         * exposed mainly so tests can substitute an instrumented {@link Cache} to
+         * observe hits/misses directly instead of via timing.
+         */
+        public Builder withCache(Cache cache) {
+            this.cache = cache;
+            return this;
+        }
+
         public SlangRuntime build() throws IOException {
-            return new SlangRuntime(instantiate(wasmPath, runtimeCompiler));
+            return instantiate(wasmPath, runtimeCompiler, cache);
         }
     }
-
-    // ── Internals ────────────────────────────────────────────────────────────
 
     /** Parse, instantiate (optionally with the runtime compiler), and run _initialize. */
-    private static SlangWasm_ModuleExports instantiate(Path wasmPath, boolean useCompiler)
-            throws IOException {
+    private static SlangRuntime instantiate(
+            Path wasmPath, boolean useCompiler, Cache cache) throws IOException {
 
         WasmModule module = Parser.parse(wasmPath.toFile());
-
-        Instance inst;
-        if (useCompiler) {
-            try {
-                inst = buildInstance(module, true);
-            } catch (Throwable t) {
-                // Endive's runtime compiler can hard-fail on some modules (e.g. an
-                // ASM frame-computation error on a function it can't translate),
-                // which is not the same as the graceful per-function interpreter
-                // fallback. Degrade to a fully interpreted instance rather than
-                // failing to load the module at all.
-                System.err.println(
-                        "[slang-wasm-lib] runtime compiler failed (" + t
-                        + "); falling back to the interpreter for this instance.");
-                inst = buildInstance(module, false);
-            }
-        } else {
-            inst = buildInstance(module, false);
-        }
-
-        // Typed view over the module's exports, generated from the wasm by the
-        // @WasmModuleInterface processor (see SlangWasm).
-        var wasm = new SlangWasm_ModuleExports(inst);
-
-        // Reactor protocol: call _initialize before any other export.
-        wasm._initialize();
-        return wasm;
-    }
-
-    /** Instantiate the module, optionally driving execution through the runtime compiler. */
-    private static Instance buildInstance(WasmModule module, boolean useCompiler) {
         var wasi = WasiPreview1.builder()
                 .withOptions(WasiOptions.builder()
                         .withStdout(System.out)
@@ -177,18 +180,49 @@ public final class SlangRuntime implements AutoCloseable {
                         .build())
                 .build();
 
+        Instance instance;
+        try {
+            if (useCompiler) {
+                try {
+                    instance = buildInstance(module, wasi, true, cache);
+                } catch (Throwable t) {
+                    System.err.println(
+                            "[slang-wasm-lib] runtime compiler failed (" + t
+                            + "); falling back to the interpreter for this instance.");
+                    instance = buildInstance(module, wasi, false, null);
+                }
+            } else {
+                instance = buildInstance(module, wasi, false, null);
+            }
+        } catch (Throwable t) {
+            wasi.close();
+            throw t;
+        }
+
+        // Typed view over the module's exports, generated from the wasm by the
+        // @WasmModuleInterface processor (see SlangWasm).
+        var wasm = new SlangWasm_ModuleExports(instance);
+
+        // Reactor protocol: call _initialize before any other export.
+        wasm._initialize();
+        return new SlangRuntime(wasm, wasi);
+    }
+
+    /** Instantiate the module, optionally driving execution through the runtime compiler. */
+    private static Instance buildInstance(
+            WasmModule module, WasiPreview1 wasi, boolean useCompiler, Cache cache) {
         return new Store()
                 .addFunction(wasi.toHostFunctions())
                 .instantiate("slang-wasm-lib", importValues -> {
-                    var b = Instance.builder(module).withImportValues(importValues);
+                    var builder = Instance.builder(module).withImportValues(importValues);
                     if (useCompiler) {
-                        // Eagerly compile to JVM bytecode. Functions the emitter
-                        // can interpret-fallback are handled per-function; a hard
-                        // failure is caught by the caller and degrades the whole
-                        // instance to the interpreter.
-                        b = b.withMachineFactory(MachineFactoryCompiler::compile);
+                        var compilerBuilder = MachineFactoryCompiler.builder(module);
+                        if (cache != null) {
+                            compilerBuilder.withCache(cache);
+                        }
+                        builder.withMachineFactory(compilerBuilder.compile());
                     }
-                    return b.build();
+                    return builder.build();
                 });
     }
 }

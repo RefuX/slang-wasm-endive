@@ -5,6 +5,10 @@ plugins {
 group = 'org.shader-slang'
 version = '0-SNAPSHOT'
 
+// The locally-published endive fork (off the 1.0.0 release, carrying the
+// @WasmModuleInterface fixes) — see the mavenLocal() note below.
+def endiveVersion = '999-SNAPSHOT'
+
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
@@ -13,7 +17,7 @@ java {
 sourceSets.main.java.srcDirs += ['src/generated/java']
 
 repositories {
-    // run.endive:*:999-SNAPSHOT — a fork off the 1.0.0 release carrying the
+    // run.endive:*:$endiveVersion — a fork off the 1.0.0 release carrying the
     // @WasmModuleInterface fixes — is published to the local Maven repo.
     mavenLocal()
     mavenCentral()
@@ -49,17 +53,21 @@ def stageWasmForAnnotationProcessor = tasks.register('stageWasmForAnnotationProc
 }
 
 dependencies {
-    implementation 'run.endive:runtime:1.0.0'
-    implementation 'run.endive:wasi:1.0.0'
+    implementation "run.endive:runtime:$endiveVersion"
+    implementation "run.endive:wasi:$endiveVersion"
     // Optional runtime compiler (compiles the WASM to JVM bytecode for much
     // faster execution). Only exercised when SlangRuntime.withRuntimeCompiler is on.
-    implementation 'run.endive:compiler:1.0.0'
+    implementation "run.endive:compiler:$endiveVersion"
+    // Disk-backed cache for the runtime compiler's output, so the JIT'd JVM
+    // bytecode survives across process restarts. Only exercised when
+    // SlangRuntime.withCacheDir is set.
+    implementation "run.endive:dircache-experimental:$endiveVersion"
 
     // The @WasmModuleInterface annotation and the processor that turns the wasm
     // into typed binding classes at compile time. The annotation is only needed
     // while compiling, so it is compileOnly.
-    compileOnly 'run.endive:annotations:999-SNAPSHOT'
-    annotationProcessor 'run.endive:annotations-processor:999-SNAPSHOT'
+    compileOnly "run.endive:annotations:$endiveVersion"
+    annotationProcessor "run.endive:annotations-processor:$endiveVersion"
     // Put the staged slang-wasm-lib.wasm on the annotation processor path so the
     // classpath-name form @WasmModuleInterface("slang-wasm-lib.wasm") resolves
     // it. files(<task>) also wires the build dependency on the staging task.

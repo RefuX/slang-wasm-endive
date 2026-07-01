@@ -1,5 +1,8 @@
 package org.shaderslang.wasm;
 
+import run.endive.compiler.Cache;
+import run.endive.experimental.dircache.DirectoryCache;
+
 import org.shaderslang.wasm.enums.CompilerOptionName;
 import org.shaderslang.wasm.enums.DebugInfoLevel;
 import org.shaderslang.wasm.enums.MatrixLayoutMode;
@@ -144,6 +147,7 @@ public final class SlangCompiler implements AutoCloseable {
         private final List<String> searchPaths = new ArrayList<>();
         private final List<CompilerOption> options = new ArrayList<>();
         private boolean runtimeCompiler = false;
+        private Cache cache;
 
         private SessionBuilder() {}
 
@@ -202,6 +206,31 @@ public final class SlangCompiler implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Persist the runtime compiler's output under {@code cacheDir} so later
+         * sessions (including in a new JVM process) can skip JIT compilation
+         * entirely (see {@link SlangRuntime.Builder#withCacheDir}). No effect
+         * unless {@link #runtimeCompiler} is also enabled. Sugar for {@link #cache}
+         * with a {@code DirectoryCache} backed by {@code cacheDir}.
+         */
+        public SessionBuilder cacheDir(Path cacheDir) {
+            this.cache = cacheDir == null ? null : new DirectoryCache(cacheDir);
+            return this;
+        }
+
+        /**
+         * Persist the runtime compiler's output in {@code cache} (see
+         * {@link SlangRuntime.Builder#withCache}). No effect unless
+         * {@link #runtimeCompiler} is also enabled. Overrides any {@link #cacheDir}
+         * call and vice versa — exposed mainly so tests can substitute an
+         * instrumented {@link Cache} to observe hits/misses directly instead of
+         * via timing.
+         */
+        public SessionBuilder cache(Cache cache) {
+            this.cache = cache;
+            return this;
+        }
+
         /** Set the optimization level ({@code CompilerOptionName.Optimization}). */
         public SessionBuilder optimizationLevel(OptimizationLevel level) {
             return option(CompilerOption.of(CompilerOptionName.Optimization, level.value));
@@ -245,6 +274,7 @@ public final class SlangCompiler implements AutoCloseable {
             }
             SlangRuntime runtime = SlangRuntime.builder(wasmPath)
                     .withRuntimeCompiler(runtimeCompiler)
+                    .withCache(cache)
                     .build();
             return openSession(runtime, targets, macros, searchPaths, options, true);
         }
