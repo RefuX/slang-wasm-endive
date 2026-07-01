@@ -47,7 +47,7 @@ class SlangCompilerSmokeTest {
 
     /**
      * One runtime-compiled instance shared by the whole suite. Loading the
-     * ~150 MB module and compiling it to JVM bytecode is the dominant cost, so we
+     * module and compiling it to JVM bytecode is the dominant cost, so we
      * pay it once and open a fresh Slang session per test on top of it. The few
      * tests that genuinely need a separate instance create their own.
      */

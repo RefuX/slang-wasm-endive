@@ -21,7 +21,7 @@ import java.util.Map;
  * One loaded {@code slang-wasm-lib.wasm} instance, shared across any number of
  * {@link SlangCompiler} sessions.
  *
- * <p>Loading the module is the expensive part: parsing the ~150 MB artifact, and
+ * <p>Loading the module is the expensive part: parsing the artifact, and
  * — if the runtime compiler is enabled — eagerly compiling it to JVM bytecode.
  * {@code SlangCompiler}'s {@code fromWasm}/{@code builder} factories create one
  * {@code SlangRuntime} per session, which is fine for one-shot use. To compile

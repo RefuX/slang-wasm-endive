@@ -78,7 +78,7 @@ dependencies {
 }
 
 tasks.named('compileJava') {
-    // Parsing the ~150 MB wasm during annotation processing needs a large heap,
+    // Parsing the wasm during annotation processing needs a large heap,
     // so fork javac into its own process with a generous memory ceiling.
     options.fork = true
     options.forkOptions.jvmArgs += ['-Xmx8g']
@@ -87,7 +87,7 @@ tasks.named('compileJava') {
 test {
     useJUnitPlatform()
 
-    // The tests share one runtime-compiled instance; eager-compiling the ~150 MB
+    // The tests share one runtime-compiled instance; eager-compiling the
     // module to JVM bytecode needs significant heap.
     jvmArgs '-Xmx10g'
 
