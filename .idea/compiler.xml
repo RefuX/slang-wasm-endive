@@ -12,7 +12,7 @@
           <entry name="$MAVEN_REPOSITORY$/run/endive/annotations/999-SNAPSHOT/annotations-999-SNAPSHOT.jar" />
           <entry name="$MAVEN_REPOSITORY$/run/endive/wasm/999-SNAPSHOT/wasm-999-SNAPSHOT.jar" />
         </processorPath>
-        <module name="slang-wasm-lib.main" />
+        <module name="slang-wasm-endive.main" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel target="11" />
