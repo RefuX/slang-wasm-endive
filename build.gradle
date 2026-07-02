@@ -151,8 +151,12 @@ test {
     useJUnitPlatform()
 
     // The tests share one runtime-compiled instance; eager-compiling the
-    // module to JVM bytecode needs significant heap.
-    jvmArgs '-Xmx10g'
+    // module to JVM bytecode needs significant heap. Some functions have
+    // exception-handler chains deep enough that ASM's Handler.removeRange
+    // recurses past the default thread stack (StackOverflowError on platforms
+    // with a small default, e.g. Linux CI runners) — see the same fix on
+    // compileWasmToJvmBytecode above.
+    jvmArgs '-Xmx10g', '-Xss256m'
 
     // Point tests at the same WASM artifact resolved above.
     systemProperty 'slang.wasm.path', wasmFile.absolutePath
