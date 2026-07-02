@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out slang-wasm-endive
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # The build depends on run.endive:*:999-SNAPSHOT, which is not published
       # anywhere: build it from the RefuX/endive fork and install it into ~/.m2.
@@ -24,14 +24,14 @@ jobs:
       # point endiveVersion in build.gradle at it and delete this checkout, the
       # cache step, and the "Build and install endive" step.
       - name: Check out the endive fork
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: RefuX/endive
           ref: main
           path: endive
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
@@ -45,7 +45,7 @@ jobs:
       # skipped entirely; on a partial hit only changed modules recompile fast.
       - name: Cache the local Maven repository
         id: endive-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: endive-m2-${{ runner.os }}-${{ steps.endive.outputs.sha }}
@@ -63,20 +63,20 @@ jobs:
           -am install
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build and test
         run: ./gradlew build --console=plain
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: build/reports/tests/test
 
       - name: Upload jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: slang-wasm-lib-jar
           path: build/libs/*.jar
