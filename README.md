@@ -102,6 +102,12 @@ try (var slang = SlangCompiler.builder()
 }
 ```
 
+To pin a SPIR-V version, target a `VulkanVersion` instead of hand-writing the profile string:
+Vulkan minor versions don't map onto SPIR-V minor versions 1:1 (Vulkan 1.3 requires SPIR-V 1.6, not
+`"spirv_1_3"`), so [`VulkanVersion`](src/main/java/org/shaderslang/wasm/VulkanVersion.java) carries
+the correct mapping — `.target(Target.SPIRV, VulkanVersion.VULKAN_1_3)` on the builder (or
+`SlangCompiler.TargetSpec.of(Target, VulkanVersion)` for the multi-target descriptor form).
+
 ### Compiling many shaders: reuse a `SlangRuntime`
 
 Loading the WASM module is the expensive part. `SlangCompiler`'s static factories create one
@@ -141,7 +147,88 @@ declaration and disassembly output. Reflection data is available as JSON
 (`CompileResult.reflectionJson()` / `SlangModule.declReflectionJson()`) and can be parsed into typed
 models under [`org.shaderslang.wasm.reflection`](src/main/java/org/shaderslang/wasm/reflection)
 (`ShaderReflection`, `EntryPointReflection`, `TypeLayoutReflection`, `VariableLayoutReflection`,
-`DeclReflection`).
+`DeclReflection`) — `CompileResult.reflection()` does the `ShaderReflection.parse(reflectionJson())`
+step for you (memoized; throws if the compile didn't succeed).
+
+For browsing bindings and packing offsets, `ShaderReflection.find("gCB.material.color")` resolves a
+nested field by dotted path in one call instead of manually chaining `.fields()` / `.typeLayout()`
+(it also looks straight through a `ConstantBuffer<T>`/`ParameterBlock<T>` wrapper to the struct's
+fields, which `VariableLayoutReflection.fields()` now does too), and `ShaderReflection.dump()` renders
+the whole tree — every parameter and entry point, with its binding — as indented text for a quick
+look while iterating:
+
+```java
+CompileResult result = slang.compile("hello", source, "main");
+System.out.println(result.reflection().dump());
+// parameters:
+//   gCB : CONSTANT_BUFFER  DESCRIPTOR_TABLE_SLOT space=0 index=0
+//     color : VECTOR<FLOAT32>[3]  offset=0 size=12
+//     count : SCALAR<INT32>  offset=12 size=4
+// entryPoints:
+//   main (COMPUTE) threadGroupSize=[1, 1, 1]
+
+long countOffset = result.reflection().find("gCB.count").orElseThrow().offset();
+```
+
+## Kotlin
+
+[`slang-wasm-endive-kotlin`](slang-wasm-endive-kotlin) is a separate module/artifact with Kotlin DSL
+builders over the Java API above. It's a thin, separately-published wrapper (depends on the main
+jar) rather than being bundled into it, so plain Java consumers don't pick up `kotlin-stdlib` as a
+transitive dependency.
+
+The quickest way in is `slang { }`, a single-target session scoped to a block, with a `compile`
+that reads straight from a file and (optionally) writes the compiled code back out to one:
+
+```kotlin
+val result = slang {
+    compile("path/to/shader.slang", output = "path/to/shader.spv")
+}
+```
+
+`target` defaults to `Target.SPIRV` — pass it explicitly (`slang(target = Target.HLSL) { ... }`) for
+another target.
+
+`vulkanVersion` pins a SPIR-V version by target Vulkan version instead of a hand-written profile
+string, using the Java API's [`VulkanVersion`](src/main/java/org/shaderslang/wasm/VulkanVersion.java)
+directly (no Kotlin-side wrapper needed):
+
+```kotlin
+val result = slang(vulkanVersion = VulkanVersion.VULKAN_1_3) {
+    compile("path/to/shader.slang")
+}
+```
+
+`slangSession { }`'s `target(Target, VulkanVersion)` — a plain Java overload, called like any other
+Kotlin function — does the same for the multi-target builder below.
+
+The reflection helpers above ([`CompileResult.reflection()`](#reflection-and-modules),
+`ShaderReflection.find(path)`, `ShaderReflection.dump()`) are plain Java methods too, so they read
+the same way from Kotlin:
+
+```kotlin
+val result = slang { compile("path/to/shader.slang") }
+println(result.reflection().dump())
+val countOffset = result.reflection().find("gCB.count").orElseThrow().offset()
+```
+
+For multiple targets, macros, search paths, or session-wide compiler options, drop down to
+`slangSession { }` (wraps `SlangCompiler.builder()`), `slangRuntime { }` (wraps
+`SlangRuntime.builder()`, for sharing one WASM instance across sessions), and a block form of
+`compile` for building a `CompileRequest` fluently:
+
+```kotlin
+slangSession {
+    target(Target.SPIRV, "spirv_1_4")
+    define("MY_MACRO", "1")
+    optimizationLevel(OptimizationLevel.HIGH)
+}.use { compiler ->
+    val result = compiler.compile("hello", source) {
+        entryPoint("main")
+        target(Target.SPIRV)
+    }
+}
+```
 
 ## Testing
 
@@ -150,7 +237,9 @@ models under [`org.shaderslang.wasm.reflection`](src/main/java/org/shaderslang/w
 ```
 
 Tests run against the real `slang-wasm-lib.wasm` artifact (located the same way as the main build —
-see [Building](#building)) and are skipped, rather than failed, if it isn't present.
+see [Building](#building)) and are skipped, rather than failed, if it isn't present. The Kotlin
+module's tests (`./gradlew :slang-wasm-endive-kotlin:test`) run against the bundled build-time-compiled
+module and need no external wasm file.
 
 ## License
 

@@ -3,7 +3,8 @@ plugins {
 }
 
 group = 'org.shader-slang'
-version = '0-SNAPSHOT'
+// Not yet published to Maven; bump and drop -SNAPSHOT for the first real release.
+version = '0.0.1-SNAPSHOT'
 
 // The locally-published endive fork (off the 1.0.0 release, carrying the
 // @WasmModuleInterface fixes) — see the mavenLocal() note below.

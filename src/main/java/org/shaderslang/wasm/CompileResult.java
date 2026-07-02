@@ -1,5 +1,7 @@
 package org.shaderslang.wasm;
 
+import org.shaderslang.wasm.reflection.ShaderReflection;
+
 /**
  * Immutable result of a {@link SlangCompiler#compile} call.
  *
@@ -12,6 +14,7 @@ public final class CompileResult {
     private final byte[] code;
     private final String reflectionJson;
     private final String diagnostics;
+    private ShaderReflection reflection;
 
     CompileResult(boolean succeeded, byte[] code, String reflectionJson, String diagnostics) {
         this.succeeded = succeeded;
@@ -40,4 +43,24 @@ public final class CompileResult {
      * non-empty even on success (warnings). Always non-empty on failure.
      */
     public String diagnostics() { return diagnostics; }
+
+    /**
+     * Parse {@link #reflectionJson()} into a typed {@link ShaderReflection}, so
+     * callers don't have to call {@link ShaderReflection#parse} themselves.
+     * Parsed once and cached for the lifetime of this result.
+     *
+     * @throws IllegalStateException if {@link #succeeded()} is false (there is
+     *                                no reflection data to parse — see {@link #diagnostics()})
+     */
+    public ShaderReflection reflection() {
+        if (!succeeded) {
+            throw new IllegalStateException(
+                    "reflection() is only available when compilation succeeded; "
+                    + "see diagnostics(): " + diagnostics);
+        }
+        if (reflection == null) {
+            reflection = ShaderReflection.parse(reflectionJson);
+        }
+        return reflection;
+    }
 }

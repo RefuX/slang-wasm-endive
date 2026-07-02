@@ -75,8 +75,10 @@ jobs:
           name: test-reports
           path: build/reports/tests/test
 
-      - name: Upload jar
+      - name: Upload jars
         uses: actions/upload-artifact@v7
         with:
-          name: slang-wasm-lib-jar
-          path: build/libs/*.jar
+          name: jars
+          path: |
+            build/libs/*.jar
+            slang-wasm-endive-kotlin/build/libs/*.jar

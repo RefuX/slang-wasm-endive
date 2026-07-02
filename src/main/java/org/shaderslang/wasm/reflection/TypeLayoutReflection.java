@@ -135,4 +135,22 @@ public final class TypeLayoutReflection {
         }
         return names;
     }
+
+    /**
+     * This type's own {@link #fields()} if it has any, otherwise (recursively) the fields of
+     * the type it wraps via {@link #elementType()}. A {@code ConstantBuffer<MyStruct>} or
+     * {@code ParameterBlock<MyStruct>} parameter's type layout has {@link TypeKind#CONSTANT_BUFFER}/
+     * {@link TypeKind#PARAMETER_BLOCK} kind, not {@link TypeKind#STRUCT} — its own {@link #fields()}
+     * is empty, and {@code MyStruct}'s fields live on {@link #elementType()} instead. This walks
+     * that chain, so {@code gCB.typeLayout().unwrappedFields()} reaches {@code MyStruct}'s fields
+     * directly without the caller needing to know about the wrapper. Empty if there are no fields
+     * anywhere in the chain (e.g. a scalar, vector, or resource with no struct in sight).
+     */
+    public List<VariableLayoutReflection> unwrappedFields() {
+        TypeLayoutReflection type = this;
+        while (type != null && type.fields.isEmpty() && type.elementType != null) {
+            type = type.elementType;
+        }
+        return type == null ? List.of() : type.fields;
+    }
 }

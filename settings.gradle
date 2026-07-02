@@ -1,1 +1,3 @@
 rootProject.name = 'slang-wasm-endive'
+
+include 'slang-wasm-endive-kotlin'

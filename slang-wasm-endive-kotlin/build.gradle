@@ -1,0 +1,35 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '2.3.21'
+}
+
+// Track the root project's group/version so the two artifacts are always
+// released together rather than drifting independently.
+group = rootProject.group
+version = rootProject.version
+description = 'Kotlin DSL builders for slang-wasm-endive'
+
+kotlin {
+    jvmToolchain(11)
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    // The Kotlin DSL is a thin layer over the Java API; consumers of this jar
+    // get the Java jar transitively.
+    api project(':')
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+
+    // Tests run against the bundled build-time-compiled module (see the root
+    // project's compileWasmToJvmBytecode task), so no external wasm file or
+    // heap/stack tuning is needed here.
+}

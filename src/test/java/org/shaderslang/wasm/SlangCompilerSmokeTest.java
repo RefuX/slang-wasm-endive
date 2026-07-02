@@ -395,6 +395,30 @@ class SlangCompilerSmokeTest {
         }
     }
 
+    // ── VulkanVersion -> SPIR-V profile mapping ──────────────────────
+
+    @Test
+    void vulkanVersionMapsToTheSpirvProfileVulkanActuallyRequires() {
+        assertEquals("spirv_1_0", VulkanVersion.VULKAN_1_0.profile);
+        assertEquals("spirv_1_3", VulkanVersion.VULKAN_1_1.profile);
+        assertEquals("spirv_1_5", VulkanVersion.VULKAN_1_2.profile);
+        assertEquals("spirv_1_6", VulkanVersion.VULKAN_1_3.profile);
+        assertEquals("spirv_1_6", VulkanVersion.VULKAN_1_4.profile);
+    }
+
+    @Test
+    void sessionBuilderTargetAcceptsVulkanVersion() throws Exception {
+        try (var slang = SlangCompiler.builder()
+                .target(Target.SPIRV, VulkanVersion.VULKAN_1_3)
+                .build()) {
+            CompileResult result = slang.compile("vulkan-version", TRIVIAL_SHADER, "main");
+            assertTrue(result.succeeded(),
+                    "Expected compile pinned via VulkanVersion to succeed. Diagnostics:\n"
+                    + result.diagnostics());
+            assertTrue(result.code().length > 0, "Expected non-empty SPIR-V");
+        }
+    }
+
     @Test
     void bundledRuntimeRejectsRuntimeCompilerOptions() {
         assertThrows(IllegalStateException.class,
@@ -458,6 +482,69 @@ class SlangCompilerSmokeTest {
                     .orElseThrow(() -> new AssertionError("Expected entry point \"main\""));
             assertEquals(org.shaderslang.wasm.enums.Stage.COMPUTE, main.stage());
             assertArrayEquals(new int[] {1, 1, 1}, main.threadGroupSize());
+        }
+    }
+
+    // reflection browsing helpers: find(), dump(), CompileResult.reflection() ─
+
+    private static final String CONSTANT_BUFFER_SHADER =
+        "struct MyStruct {\n"
+        + "    float3 color;\n"
+        + "    int count;\n"
+        + "    float2 offset;\n"
+        + "};\n"
+        + "ConstantBuffer<MyStruct> gCB;\n"
+        + "RWStructuredBuffer<float> output;\n"
+        + "[shader(\"compute\")] [numthreads(1,1,1)]\n"
+        + "void main() { output[0] = gCB.color.x + gCB.count + gCB.offset.x; }";
+
+    @Test
+    void findResolvesNestedFieldByDottedPath() throws Exception {
+        try (var slang = shared.forSpirv()) {
+            CompileResult result = slang.compile("find-path", CONSTANT_BUFFER_SHADER, "main");
+            assertTrue(result.succeeded(), "Diagnostics:\n" + result.diagnostics());
+
+            ShaderReflection reflection = result.reflection();
+
+            VariableLayoutReflection count = reflection.find("gCB.count")
+                    .orElseThrow(() -> new AssertionError("Expected to find \"gCB.count\""));
+            assertEquals("count", count.name());
+            assertEquals(ParameterCategory.UNIFORM, count.bindingCategory());
+            assertTrue(count.offset() > 0, "Expected \"count\" to sit after \"color\" in the buffer");
+
+            assertTrue(reflection.find("gCB.nonexistent").isEmpty());
+            assertTrue(reflection.find("nonexistent").isEmpty());
+        }
+    }
+
+    @Test
+    void dumpReportsBindingsAndOffsetsForEveryMember() throws Exception {
+        try (var slang = shared.forSpirv()) {
+            CompileResult result = slang.compile("dump-test", CONSTANT_BUFFER_SHADER, "main");
+            assertTrue(result.succeeded(), "Diagnostics:\n" + result.diagnostics());
+
+            String dump = result.reflection().dump();
+            assertTrue(dump.contains("gCB"), "Expected the dump to mention \"gCB\", got:\n" + dump);
+            assertTrue(dump.contains("color"), "Expected the dump to mention \"color\", got:\n" + dump);
+            assertTrue(dump.contains("offset="),
+                    "Expected the dump to report a byte offset, got:\n" + dump);
+            assertTrue(dump.contains("main (COMPUTE)"),
+                    "Expected the dump to mention the entry point, got:\n" + dump);
+        }
+    }
+
+    @Test
+    void compileResultReflectionIsMemoizedAndRejectsFailedCompiles() throws Exception {
+        try (var slang = shared.forSpirv()) {
+            CompileResult result = slang.compile("reflection-memo", TRIVIAL_SHADER, "main");
+            assertTrue(result.succeeded(), "Diagnostics:\n" + result.diagnostics());
+            assertSame(result.reflection(), result.reflection(),
+                    "Expected reflection() to return the same parsed instance on repeated calls");
+
+            CompileResult failed =
+                    slang.compile("reflection-fail", "void main() { undefinedFunction(); }", "main");
+            assertFalse(failed.succeeded());
+            assertThrows(IllegalStateException.class, failed::reflection);
         }
     }
 

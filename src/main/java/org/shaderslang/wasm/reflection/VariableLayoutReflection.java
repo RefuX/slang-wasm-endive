@@ -4,6 +4,7 @@ import org.shaderslang.wasm.enums.ParameterCategory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.shaderslang.wasm.reflection.JsonUtil.*;
 
@@ -95,9 +96,21 @@ public final class VariableLayoutReflection {
         return typeLayout;
     }
 
-    /** Field layouts, if {@link #typeLayout()} is a struct. Equivalent to {@code typeLayout().fields()}. */
+    /**
+     * Field layouts, if {@link #typeLayout()} is (or wraps, e.g. a {@code ConstantBuffer<T>} or
+     * {@code ParameterBlock<T>}) a struct. Equivalent to {@code typeLayout().unwrappedFields()}.
+     */
     public List<VariableLayoutReflection> fields() {
-        return typeLayout == null ? List.of() : typeLayout.fields();
+        return typeLayout == null ? List.of() : typeLayout.unwrappedFields();
+    }
+
+    /**
+     * Find a direct child field by name (see {@link #fields()} for what counts as a field —
+     * this unwraps a constant buffer / parameter block wrapper the same way). Empty if this
+     * member isn't (or doesn't wrap) a struct, or has no field with that name.
+     */
+    public Optional<VariableLayoutReflection> find(String name) {
+        return fields().stream().filter(f -> name.equals(f.name())).findFirst();
     }
 
     /**

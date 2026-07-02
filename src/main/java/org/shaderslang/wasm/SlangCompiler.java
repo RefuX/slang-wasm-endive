@@ -101,6 +101,14 @@ public final class SlangCompiler implements AutoCloseable {
             return new TargetSpec(format, profile, EnumSet.noneOf(TargetFlags.class));
         }
 
+        /**
+         * A target pinned to the SPIR-V profile {@code vulkanVersion} requires as a
+         * baseline (see {@link VulkanVersion}), with no flags.
+         */
+        public static TargetSpec of(Target format, VulkanVersion vulkanVersion) {
+            return of(format, vulkanVersion.profile);
+        }
+
         /** A target with an explicit profile and flag set; either may be empty. */
         public static TargetSpec of(Target format, String profile, Set<TargetFlags> flags) {
             return new TargetSpec(format, profile, flags);
@@ -171,6 +179,15 @@ public final class SlangCompiler implements AutoCloseable {
         public SessionBuilder target(Target format, String profile) {
             targets.add(TargetSpec.of(format, profile));
             return this;
+        }
+
+        /**
+         * Add a compile target pinned to the SPIR-V profile {@code vulkanVersion}
+         * requires as a baseline (see {@link VulkanVersion}), as an alternative to
+         * hand-writing the profile string.
+         */
+        public SessionBuilder target(Target format, VulkanVersion vulkanVersion) {
+            return target(format, vulkanVersion.profile);
         }
 
         /** Add a compile target built from a {@link TargetSpec} (profile and/or flags). */
