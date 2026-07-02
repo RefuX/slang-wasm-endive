@@ -85,8 +85,11 @@ def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaEx
     classpath = configurations.endiveBuildTimeCompiler
     mainClass = 'run.endive.experimental.compiler.cli.Cli'
     // Compiling the ~150k-function module needs a large heap, like the
-    // annotation processor below.
+    // annotation processor below. A few functions have exception-handler chains
+    // deep enough that ASM's Handler.removeRange recurses past the default
+    // thread stack (StackOverflowError), so raise -Xss too.
     maxHeapSize = '10g'
+    jvmArgs '-Xss256m'
     args wasmFile.absolutePath,
             '--prefix', 'org.shaderslang.wasm.SlangWasmModule',
             '--source-dir', endiveGeneratedSources.get().asFile.absolutePath,
