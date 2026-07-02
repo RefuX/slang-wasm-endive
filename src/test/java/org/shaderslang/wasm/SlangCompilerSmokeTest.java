@@ -46,10 +46,11 @@ class SlangCompilerSmokeTest {
     private static Path wasmPath;
 
     /**
-     * One runtime-compiled instance shared by the whole suite. Loading the
-     * module and compiling it to JVM bytecode is the dominant cost, so we
-     * pay it once and open a fresh Slang session per test on top of it. The few
-     * tests that genuinely need a separate instance create their own.
+     * One instance shared by the whole suite, running on the bundled module that
+     * the endive build-time compiler translated to JVM bytecode during the Gradle
+     * build. Loading the module is the dominant cost, so we pay it once and open
+     * a fresh Slang session per test on top of it. The few tests that genuinely
+     * need a separate instance create their own.
      */
     private static SlangRuntime shared;
 
@@ -65,9 +66,7 @@ class SlangCompilerSmokeTest {
                 "slang-wasm-lib.wasm not found at " + wasmPath.toAbsolutePath()
                 + " — build it first with: cmake --build --preset slang-wasm-lib");
 
-        shared = SlangRuntime.builder(wasmPath)
-                .withRuntimeCompiler(true)
-                .build();
+        shared = SlangRuntime.load();
     }
 
     @AfterAll
@@ -77,11 +76,9 @@ class SlangCompilerSmokeTest {
         }
     }
 
-    /** A fresh runtime-compiled instance, for the few tests that need isolation. */
+    /** A fresh build-time-compiled instance, for the few tests that need isolation. */
     private static SlangRuntime freshRuntime() throws IOException {
-        return SlangRuntime.builder(wasmPath)
-                .withRuntimeCompiler(true)
-                .build();
+        return SlangRuntime.load();
     }
 
     // SPIR-V smoke test ──────────────────────────────────────────────
@@ -344,8 +341,10 @@ class SlangCompilerSmokeTest {
 
     @Test
     void builderApiCompilesTwoTargetTwoEntryPointPipelineWithNoRawIntegers() throws Exception {
-        // This test exercises the standalone SessionBuilder (its own instance);
-        // run it compiled + cached so it stays fast like the shared-instance tests.
+        // This test exercises the standalone SessionBuilder (its own instance).
+        // It deliberately loads the external wasm with the *runtime* compiler —
+        // the rest of the suite runs on the bundled build-time-compiled module,
+        // so this keeps the runtime-compiler path covered too.
         try (var slang = SlangCompiler.builder()
                 .wasm(wasmPath)
                 .target(Target.SPIRV, "spirv_1_4")
@@ -379,6 +378,28 @@ class SlangCompilerSmokeTest {
                     "Expected CompileRequest-based compile to succeed. Diagnostics:\n"
                     + viaRequest.diagnostics());
         }
+    }
+
+    @Test
+    void builderWithoutWasmPathUsesBundledCompiledModule() throws Exception {
+        // No wasm(Path): the SessionBuilder falls back to the bundled module that
+        // was compiled to JVM bytecode at build time.
+        try (var slang = SlangCompiler.builder()
+                .target(Target.SPIRV)
+                .build()) {
+            CompileResult result = slang.compile("bundled", TRIVIAL_SHADER, "main");
+            assertTrue(result.succeeded(),
+                    "Expected compile on the bundled module to succeed. Diagnostics:\n"
+                    + result.diagnostics());
+            assertTrue(result.code().length > 0, "Expected non-empty SPIR-V");
+        }
+    }
+
+    @Test
+    void bundledRuntimeRejectsRuntimeCompilerOptions() {
+        assertThrows(IllegalStateException.class,
+                () -> SlangRuntime.builder().withRuntimeCompiler(true).build(),
+                "withRuntimeCompiler must be rejected on the bundled module");
     }
 
     @Test

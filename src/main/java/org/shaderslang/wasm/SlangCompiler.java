@@ -28,9 +28,9 @@ import java.util.Set;
  * use it in a try-with-resources block to ensure the session and WASM instance
  * are torn down deterministically.
  *
- * <p>Usage:
+ * <p>Usage (on the bundled, build-time-compiled module):
  * <pre>{@code
- * try (var slang = SlangCompiler.forSpirvFromWasm(Path.of("slang-wasm-lib.wasm"))) {
+ * try (var slang = SlangCompiler.forSpirv()) {
  *     CompileResult r = slang.compile("hello",
  *         "[shader(\"compute\")] [numthreads(1,1,1)] void main() {}",
  *         "main");
@@ -151,7 +151,11 @@ public final class SlangCompiler implements AutoCloseable {
 
         private SessionBuilder() {}
 
-        /** The WASM module file to load. Required before calling {@link #build()}. */
+        /**
+         * Load an external WASM module file instead of the bundled,
+         * build-time-compiled one. Optional: without it, {@link #build()} uses the
+         * bundled module.
+         */
         public SessionBuilder wasm(Path wasmPath) {
             this.wasmPath = wasmPath;
             return this;
@@ -199,7 +203,8 @@ public final class SlangCompiler implements AutoCloseable {
          * This adds a one-time compilation cost when the session is built but
          * makes the actual shader compiles dramatically faster than the default
          * interpreter — worthwhile when the session will compile more than a couple
-         * of shaders.
+         * of shaders. Only applies to external modules loaded via {@link #wasm};
+         * the bundled module is already compiled at build time.
          */
         public SessionBuilder runtimeCompiler(boolean enabled) {
             this.runtimeCompiler = enabled;
@@ -258,21 +263,22 @@ public final class SlangCompiler implements AutoCloseable {
         }
 
         /**
-         * Instantiate the WASM module and create the configured session.
+         * Instantiate the WASM module (the bundled build-time-compiled one, or the
+         * external file given to {@link #wasm}) and create the configured session.
          *
-         * @throws IllegalStateException if {@link #wasm} was never called or no
-         *                                target was ever added
+         * @throws IllegalStateException if no target was ever added, or a
+         *                                {@link #runtimeCompiler}/{@link #cache}
+         *                                option was set without {@link #wasm}
          * @throws IOException if the WASM file cannot be read, the module fails
          *                     to instantiate, or session creation fails
          */
         public SlangCompiler build() throws IOException {
-            if (wasmPath == null) {
-                throw new IllegalStateException("wasm(Path) is required");
-            }
             if (targets.isEmpty()) {
                 throw new IllegalStateException("at least one target(...) is required");
             }
-            SlangRuntime runtime = SlangRuntime.builder(wasmPath)
+            SlangRuntime runtime = (wasmPath == null
+                            ? SlangRuntime.builder()
+                            : SlangRuntime.builder(wasmPath))
                     .withRuntimeCompiler(runtimeCompiler)
                     .withCache(cache)
                     .build();
@@ -304,8 +310,16 @@ public final class SlangCompiler implements AutoCloseable {
     }
 
     /**
-     * Create a {@code SlangCompiler} targeting SPIR-V, loading the WASM module
-     * from {@code wasmPath}.
+     * Create a {@code SlangCompiler} targeting SPIR-V on the bundled,
+     * build-time-compiled WASM module.
+     */
+    public static SlangCompiler forSpirv() throws IOException {
+        return openSession(SlangRuntime.load(), Target.SPIRV, "", true);
+    }
+
+    /**
+     * Create a {@code SlangCompiler} targeting SPIR-V, loading an external WASM
+     * module from {@code wasmPath} (interpreted execution).
      */
     public static SlangCompiler forSpirvFromWasm(Path wasmPath) throws IOException {
         return fromWasm(wasmPath, Target.SPIRV, "");

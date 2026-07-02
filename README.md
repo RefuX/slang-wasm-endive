@@ -7,14 +7,21 @@ compiler for the JVM).
 
 ## How it works
 
-`slang-wasm-lib.wasm` — a build of the Slang compiler to WebAssembly — is loaded and executed
-in-process using endive. Two execution modes are available:
+`slang-wasm-lib.wasm` — a build of the Slang compiler to WebAssembly — is executed in-process
+using endive. Three execution modes are available:
 
-- **Interpreted** (default): the WASM module runs directly, no extra startup cost.
-- **JIT compiled**: endive's runtime compiler translates the module to JVM bytecode ahead of time,
-  making each subsequent shader compile roughly an order of magnitude faster, at the cost of a
-  one-time translation delay. The compiled bytecode can be persisted to disk and reused across JVM
-  processes.
+- **Build-time compiled** (default): endive's build-time compiler translates the module to JVM
+  bytecode during the Gradle build (the `compileWasmToJvmBytecode` task) and bundles the resulting
+  classes in the jar. Instances start with zero JIT cost and compile shaders at full compiled
+  speed; no WASM file is needed at run time. A few very large Slang functions exceed the JVM
+  method-size limit and stay interpreted — the build is configured with
+  `--interpreter-fallback WARN`, so it logs one warning per such function instead of failing.
+- **Runtime (JIT) compiled**: for an external WASM file, endive's runtime compiler translates the
+  module to JVM bytecode when the runtime is built — same execution speed, but with a one-time
+  translation delay per process. The compiled bytecode can be persisted to disk and reused across
+  JVM processes.
+- **Interpreted**: an external WASM file runs directly on the interpreter. No startup cost, but
+  shader compiles are roughly an order of magnitude slower.
 
 At compile time, an annotation processor (`run.endive:annotations-processor`) reads
 `slang-wasm-lib.wasm` and generates typed Java wrappers for its exports (see
@@ -36,12 +43,13 @@ WASM exports or memory pointers directly.
 
 This project currently builds against a local fork of `endive` (version `999-SNAPSHOT`, set via
 `endiveVersion` in [build.gradle](build.gradle)) rather than an upstream release, because it carries
-fixes needed for the `@WasmModuleInterface` annotation processor. Build and publish it to your local
-Maven repository first:
+fixes needed for the `@WasmModuleInterface` annotation processor. Build and install it (including
+the build-time compiler CLI used by the `compileWasmToJvmBytecode` task) to your local Maven
+repository first:
 
 ```
 cd /path/to/endive
-./gradlew publishToMavenLocal
+./mvnw -DskipTests -pl compiler,runtime,wasi,dircache,annotations/processor,build-time-compiler-cli -am install
 ```
 
 Then point this build at your `slang-wasm-lib.wasm` artifact, either via a Gradle project property
@@ -59,7 +67,7 @@ If neither is set, the build looks for `slang-wasm-lib.wasm` in the project root
 ## Usage
 
 ```java
-try (var slang = SlangCompiler.forSpirvFromWasm(Path.of("slang-wasm-lib.wasm"))) {
+try (var slang = SlangCompiler.forSpirv()) {
     CompileResult result = slang.compile(
         "hello",
         "[shader(\"compute\")] [numthreads(1,1,1)] void main() {}",
@@ -73,6 +81,10 @@ try (var slang = SlangCompiler.forSpirvFromWasm(Path.of("slang-wasm-lib.wasm")))
 }
 ```
 
+This runs on the bundled build-time-compiled module. To load an external WASM artifact instead,
+use `SlangCompiler.forSpirvFromWasm(Path)` (interpreted) or the builder's `wasm(Path)` +
+`runtimeCompiler(true)` (runtime compiled).
+
 `SlangCompiler` owns one WASM instance and one Slang session configured for a single compile
 target; it's `AutoCloseable`. The fluent `builder()` API supports multiple targets, preprocessor
 macros, search paths, and session-wide compiler options (optimization level, debug info, matrix
@@ -80,7 +92,6 @@ layout):
 
 ```java
 try (var slang = SlangCompiler.builder()
-        .wasm(Path.of("slang-wasm-lib.wasm"))
         .target(Target.SPIRV)
         .define("MY_MACRO", "1")
         .optimizationLevel(OptimizationLevel.HIGH)
@@ -91,26 +102,33 @@ try (var slang = SlangCompiler.builder()
 
 ### Compiling many shaders: reuse a `SlangRuntime`
 
-Loading the WASM module is the expensive part — parsing the artifact and, if enabled,
-JIT-compiling it. `SlangCompiler`'s static factories create one `SlangRuntime` per call, which is
-fine for one-shot use. To compile many shaders, load the runtime once (optionally with the runtime
-compiler and a disk cache) and open a cheap session per configuration on top of it:
+Loading the WASM module is the expensive part. `SlangCompiler`'s static factories create one
+`SlangRuntime` per call, which is fine for one-shot use. To compile many shaders, load the runtime
+once and open a cheap session per configuration on top of it:
+
+```java
+try (var runtime = SlangRuntime.load()) {
+    try (var spirv = runtime.forSpirv()) {
+        CompileResult r = spirv.compile("hello", source, "main");
+    }
+    // ... more sessions on the same instance, no re-load ...
+}
+```
+
+To run an external WASM artifact through the *runtime* compiler instead of the bundled
+build-time-compiled module, use the `Path`-based builder; `withCacheDir` persists the JIT'd
+bytecode to disk, keyed by the WASM module's content digest, so a later run (even in a new JVM
+process) can skip compilation entirely (for a custom cache backend, use `withCache(Cache)` —
+`Cache` is `run.endive.compiler.Cache`):
 
 ```java
 try (var runtime = SlangRuntime.builder(wasmPath)
         .withRuntimeCompiler(true)
         .withCacheDir(Path.of(".slang-cache"))
         .build()) {
-    try (var spirv = runtime.forSpirv()) {
-        CompileResult r = spirv.compile("hello", source, "main");
-    }
-    // ... more sessions on the same instance, no re-parse / re-compile ...
+    // ...
 }
 ```
-
-`withCacheDir` persists the JIT'd bytecode to disk, keyed by the WASM module's content digest, so a
-later run (even in a new JVM process) can skip compilation entirely. For a custom cache backend,
-use `withCache(Cache)` instead (`Cache` is `run.endive.compiler.Cache`).
 
 ### Reflection and modules
 

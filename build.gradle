@@ -52,7 +52,62 @@ def stageWasmForAnnotationProcessor = tasks.register('stageWasmForAnnotationProc
     into(layout.buildDirectory.dir("wasm-annotation-processor"))
 }
 
+// ── Build-time compilation of the WASM to JVM bytecode ──────────────────────
+// endive's build-time compiler translates slang-wasm-lib.wasm into Machine
+// classes once, at build time, so instances start with zero JIT cost. It emits:
+//   - classes dir:  the compiled *Machine .class files
+//   - sources dir:  SlangWasmModule.java, a CompiledModule facade over them
+//   - classes dir/…/SlangWasmModule.meta: the module with the bodies of
+//     compiled functions stripped out, parsed at runtime instead of the full wasm
+// A few very large Slang functions exceed the JVM method-size limit and cannot
+// be compiled; --interpreter-fallback WARN leaves them interpreted (their
+// bodies stay intact in the .meta module) and logs one warning per function
+// instead of failing the build.
+def endiveGeneratedSources = layout.buildDirectory.dir('generated/endive/sources')
+def endiveGeneratedClasses = layout.buildDirectory.dir('generated/endive/classes')
+
+configurations {
+    endiveBuildTimeCompiler
+}
+
+def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaExec) {
+    description = 'Compiles slang-wasm-lib.wasm to JVM bytecode with the endive build-time compiler.'
+    doFirst {
+        if (!wasmFile.exists()) {
+            throw new GradleException(
+                    "slang-wasm-lib.wasm not found at ${wasmFile} — see stageWasmForAnnotationProcessor.")
+        }
+    }
+    // inputs.files (not .file) so a missing wasm reaches the friendly doFirst error.
+    inputs.files(wasmFile)
+    outputs.dir(endiveGeneratedSources)
+    outputs.dir(endiveGeneratedClasses)
+    classpath = configurations.endiveBuildTimeCompiler
+    mainClass = 'run.endive.experimental.compiler.cli.Cli'
+    // Compiling the ~150k-function module needs a large heap, like the
+    // annotation processor below.
+    maxHeapSize = '10g'
+    args wasmFile.absolutePath,
+            '--prefix', 'org.shaderslang.wasm.SlangWasmModule',
+            '--source-dir', endiveGeneratedSources.get().asFile.absolutePath,
+            '--class-dir', endiveGeneratedClasses.get().asFile.absolutePath,
+            '--wasm-dir', endiveGeneratedClasses.get().asFile.absolutePath,
+            '--interpreter-fallback', 'WARN'
+}
+
+// The generated facade is ordinary source; the Machine classes and the .meta
+// module are prebuilt classpath entries.
+sourceSets.main.java.srcDir(files(endiveGeneratedSources).builtBy(compileWasmToJvmBytecode))
+def endiveCompiledModule = files(endiveGeneratedClasses).builtBy(compileWasmToJvmBytecode)
+
 dependencies {
+    // The endive build-time compiler CLI, run by compileWasmToJvmBytecode.
+    endiveBuildTimeCompiler "run.endive:build-time-compiler-cli-experimental:$endiveVersion"
+
+    // The build-time-compiled Machine classes + .meta module (compile classpath:
+    // the generated SlangWasmModule facade references the Machine class).
+    implementation endiveCompiledModule
+
     implementation "run.endive:runtime:$endiveVersion"
     implementation "run.endive:wasi:$endiveVersion"
     // Optional runtime compiler (compiles the WASM to JVM bytecode for much
@@ -75,6 +130,11 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+jar {
+    // Ship the build-time-compiled Machine classes and the .meta module.
+    from endiveCompiledModule
 }
 
 tasks.named('compileJava') {
