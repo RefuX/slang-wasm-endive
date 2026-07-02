@@ -23,6 +23,9 @@
 hs_err_pid*
 replay_pid*
 
+# The endive fork checked out next to the project by the CI workflow
+endive/
+
 # Gradle
 .gradle/
 build/

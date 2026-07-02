@@ -1,5 +1,7 @@
 # slang-wasm-endive
 
+[![CI](https://github.com/RefuX/slang-wasm-endive/actions/workflows/ci.yml/badge.svg)](https://github.com/RefuX/slang-wasm-endive/actions/workflows/ci.yml)
+
 A pure-Java library for the [Slang](https://shader-slang.org/) shader compiler: compile, reflect on,
 and serialize Slang shaders without any JNI or native binary — the Slang compiler runs as a WASM
 module executed entirely on the JVM via [endive](https://github.com/RefuX/endive) (a WASM runtime/AOT

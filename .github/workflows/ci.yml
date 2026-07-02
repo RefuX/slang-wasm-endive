@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out slang-wasm-endive
+        uses: actions/checkout@v4
+
+      # The build depends on run.endive:*:999-SNAPSHOT, which is not published
+      # anywhere: build it from the RefuX/endive fork and install it into ~/.m2.
+      # Once an upstream endive release carries the fixes this project needs,
+      # point endiveVersion in build.gradle at it and delete this checkout, the
+      # cache step, and the "Build and install endive" step.
+      - name: Check out the endive fork
+        uses: actions/checkout@v4
+        with:
+          repository: RefuX/endive
+          ref: main
+          path: endive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Resolve endive commit
+        id: endive
+        run: echo "sha=$(git -C endive rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Key the local Maven repository on the endive commit: on an exact hit the
+      # 999-SNAPSHOT artifacts are already installed and the Maven build is
+      # skipped entirely; on a partial hit only changed modules recompile fast.
+      - name: Cache the local Maven repository
+        id: endive-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: endive-m2-${{ runner.os }}-${{ steps.endive.outputs.sha }}
+          restore-keys: |
+            endive-m2-${{ runner.os }}-
+
+      - name: Build and install endive 999-SNAPSHOT
+        if: steps.endive-cache.outputs.cache-hit != 'true'
+        working-directory: endive
+        run: >
+          ./mvnw -B -ntp -DskipTests
+          -Dspotless.check.skip=true -Dcheckstyle.skip=true
+          -Dmdep.analyze.skip=true -Denforcer.skip=true
+          -pl compiler,runtime,wasi,dircache,annotations/processor,build-time-compiler-cli
+          -am install
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew build --console=plain
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: build/reports/tests/test
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: slang-wasm-lib-jar
+          path: build/libs/*.jar
