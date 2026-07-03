@@ -16,7 +16,6 @@ private const val TRIVIAL_SHADER =
     "[shader(\"compute\")] [numthreads(1,1,1)] void main() {}"
 
 class SlangDslTest {
-
     @Test
     fun `slangSession compiles a trivial shader`() {
         slangSession {
@@ -42,36 +41,43 @@ class SlangDslTest {
     @Test
     fun `compile block form builds a CompileRequest`() {
         slangSession { target(Target.SPIRV) }.use { compiler ->
-            val result = compiler.compile("hello", TRIVIAL_SHADER) {
-                entryPoint("main")
-                target(Target.SPIRV)
-            }
+            val result =
+                compiler.compile("hello", TRIVIAL_SHADER) {
+                    entryPoint("main")
+                    target(Target.SPIRV)
+                }
             assertTrue(result.succeeded(), "Diagnostics:\n${result.diagnostics()}")
         }
     }
 
     @Test
-    fun `slang scope defaults to SPIRV and compiles a shader file`(@TempDir dir: Path) {
+    fun `slang scope defaults to SPIRV and compiles a shader file`(
+        @TempDir dir: Path,
+    ) {
         val source = dir.resolve("hello.slang")
         Files.writeString(source, TRIVIAL_SHADER)
 
-        val result = slang {
-            compile(source.toString())
-        }
+        val result =
+            slang {
+                compile(source.toString())
+            }
 
         assertTrue(result.succeeded(), "Diagnostics:\n${result.diagnostics()}")
         assertTrue(result.code().isNotEmpty())
     }
 
     @Test
-    fun `compile writes the compiled code to output when given`(@TempDir dir: Path) {
+    fun `compile writes the compiled code to output when given`(
+        @TempDir dir: Path,
+    ) {
         val source = dir.resolve("hello.slang")
         val output = dir.resolve("hello.spv")
         Files.writeString(source, TRIVIAL_SHADER)
 
-        val result = slang(target = Target.SPIRV) {
-            compile(source.toString(), output = output.toString())
-        }
+        val result =
+            slang(target = Target.SPIRV) {
+                compile(source.toString(), output = output.toString())
+            }
 
         assertTrue(result.succeeded(), "Diagnostics:\n${result.diagnostics()}")
         assertArrayEquals(result.code(), Files.readAllBytes(output))
@@ -90,9 +96,10 @@ class SlangDslTest {
 
     @Test
     fun `slang with vulkanVersion compiles using the mapped profile`() {
-        val result = slang(vulkanVersion = VulkanVersion.VULKAN_1_3) {
-            compile("hello", TRIVIAL_SHADER, "main")
-        }
+        val result =
+            slang(vulkanVersion = VulkanVersion.VULKAN_1_3) {
+                compile("hello", TRIVIAL_SHADER, "main")
+            }
         assertTrue(result.succeeded(), "Diagnostics:\n${result.diagnostics()}")
         assertTrue(result.code().isNotEmpty())
     }

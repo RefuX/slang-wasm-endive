@@ -81,8 +81,7 @@ fun SlangCompiler.compile(
  * }
  * ```
  */
-inline fun slangSession(block: SlangCompiler.SessionBuilder.() -> Unit): SlangCompiler =
-    SlangCompiler.builder().apply(block).build()
+inline fun slangSession(block: SlangCompiler.SessionBuilder.() -> Unit): SlangCompiler = SlangCompiler.builder().apply(block).build()
 
 /**
  * Build a [SlangRuntime], sharable across any number of sessions opened on it
@@ -121,5 +120,4 @@ inline fun SlangCompiler.compile(
     moduleName: String,
     source: String,
     block: SlangCompiler.CompileRequest.() -> Unit,
-): CompileResult =
-    compile(SlangCompiler.CompileRequest.source(moduleName, source).apply(block))
+): CompileResult = compile(SlangCompiler.CompileRequest.source(moduleName, source).apply(block))
