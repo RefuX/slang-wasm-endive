@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Resource shape. Mirrors {@code SlangResourceShape} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum ResourceShape {
     RESOURCE_BASE_SHAPE_MASK(15),
     RESOURCE_NONE(0),

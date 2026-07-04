@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Compiler option key. Mirrors {@code CompilerOptionName} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum CompilerOptionName {
     /** stringValue0: macro name;  stringValue1: macro value */
     MacroDefine(0),
@@ -248,7 +251,8 @@ public enum CompilerOptionName {
     TraceFunctionCoverage(148),
     /** bool: insert per-branch-arm coverage counters */
     TraceBranchCoverage(149),
-    CompilerVersion(153);
+    CompilerVersion(153),
+    WarningLevel(155);
 
     public final int value;
 

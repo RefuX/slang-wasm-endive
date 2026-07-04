@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Compile output format. Mirrors {@code SlangCompileTarget} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum Target {
     TARGET_UNKNOWN(0),
     TARGET_NONE(1),

@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Matrix storage order. Mirrors {@code SlangMatrixLayoutMode} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum MatrixLayoutMode {
     MODE_UNKNOWN(0),
     ROW_MAJOR(1),

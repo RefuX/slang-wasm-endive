@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Downstream compiler. Mirrors {@code SlangPassThrough} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum PassThrough {
     NONE(0),
     FXC(1),

@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Optimisation level. Mirrors {@code SlangOptimizationLevel} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum OptimizationLevel {
     /** Don't optimize at all. */
     NONE(0),

@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Layout rule set. Mirrors {@code SlangLayoutRules} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum LayoutRules {
     DEFAULT(0),
     METAL_ARGUMENT_BUFFER_TIER_2(1),

@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Parameter binding category. Mirrors {@code SlangParameterCategory} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum ParameterCategory {
     NONE(0),
     MIXED(1),

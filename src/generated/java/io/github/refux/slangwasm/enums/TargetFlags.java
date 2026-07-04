@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Target flag bits. Mirrors {@code SlangTargetFlags} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum TargetFlags {
     PARAMETER_BLOCKS_USE_REGISTER_SPACES(16),
     GENERATE_WHOLE_PROGRAM(256),

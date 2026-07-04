@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Pipeline stage. Mirrors {@code SlangStage} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum Stage {
     NONE(0),
     VERTEX(1),
@@ -23,7 +26,8 @@ public enum Stage {
     CALLABLE(12),
     MESH(13),
     AMPLIFICATION(14),
-    DISPATCH(15);
+    DISPATCH(15),
+    NODE(16);
 
     public final int value;
 

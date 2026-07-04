@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Reflection type kind. Mirrors {@code SlangTypeKind} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum TypeKind {
     NONE(0),
     STRUCT(1),

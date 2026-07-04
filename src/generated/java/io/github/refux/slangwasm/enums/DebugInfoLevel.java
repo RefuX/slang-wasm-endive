@@ -6,7 +6,10 @@
 
 package io.github.refux.slangwasm.enums;
 
+import javax.annotation.processing.Generated;
+
 /** Debug info verbosity. Mirrors {@code SlangDebugInfoLevel} in slang.h. */
+@Generated("source/slang-wasm-wasi/tools/generate-slang-bindings.py")
 public enum DebugInfoLevel {
     /** Don't emit debug information at all. */
     NONE(0),
