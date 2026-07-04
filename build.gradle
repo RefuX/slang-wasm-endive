@@ -2,7 +2,7 @@ plugins {
     id 'java'
 }
 
-group = 'org.shader-slang'
+group = 'io.github.refux'
 // Not yet published to Maven; bump and drop -SNAPSHOT for the first real release.
 version = '0.0.1-SNAPSHOT'
 
@@ -24,16 +24,16 @@ repositories {
     mavenCentral()
 }
 
-// The slang-wasm-lib.wasm artifact. @WasmModuleInterface reads this at COMPILE
+// The slang-wasm-wasi.wasm artifact. @WasmModuleInterface reads this at COMPILE
 // TIME to generate the typed export/import wrappers (SlangWasm_ModuleExports
 // etc.), and the tests load it at run time. It is produced by the CMake build
-// (cmake --build --preset slang-wasm-lib). Override the location with
+// (cmake --build --preset slang-wasm-wasi). Override the location with
 // -Pslang.wasm.path=... or the SLANG_WASM_PATH environment variable.
 def wasmFile = file(project.findProperty('slang.wasm.path')
         ?: System.getenv('SLANG_WASM_PATH')
-        ?: "${rootProject.projectDir}/slang-wasm-lib.wasm")
+        ?: "${rootProject.projectDir}/slang-wasm-wasi.wasm")
 
-// Stage only slang-wasm-lib.wasm into its own directory so the annotation
+// Stage only slang-wasm-wasi.wasm into its own directory so the annotation
 // processor path holds just that one file. Pointing the processor path at the
 // real build/bin directory would make Gradle fingerprint ~400 MB of unrelated
 // wasm artifacts on every build.
@@ -41,10 +41,10 @@ def stageWasmForAnnotationProcessor = tasks.register('stageWasmForAnnotationProc
     doFirst {
         if (!wasmFile.exists()) {
             throw new GradleException(
-                    "slang-wasm-lib.wasm not found at ${wasmFile}\n" +
+                    "slang-wasm-wasi.wasm not found at ${wasmFile}\n" +
                     "@WasmModuleInterface reads it at compile time to generate the typed WASM\n" +
                     "bindings, so it must exist before compiling. Build it first with\n" +
-                    "  cmake --build --preset slang-wasm-lib\n" +
+                    "  cmake --build --preset slang-wasm-wasi\n" +
                     "or point the build at an existing artifact with -Pslang.wasm.path=... or " +
                     "the SLANG_WASM_PATH environment variable.")
         }
@@ -54,7 +54,7 @@ def stageWasmForAnnotationProcessor = tasks.register('stageWasmForAnnotationProc
 }
 
 // ── Build-time compilation of the WASM to JVM bytecode ──────────────────────
-// endive's build-time compiler translates slang-wasm-lib.wasm into Machine
+// endive's build-time compiler translates slang-wasm-wasi.wasm into Machine
 // classes once, at build time, so instances start with zero JIT cost. It emits:
 //   - classes dir:  the compiled *Machine .class files
 //   - sources dir:  SlangWasmModule.java, a CompiledModule facade over them
@@ -72,11 +72,11 @@ configurations {
 }
 
 def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaExec) {
-    description = 'Compiles slang-wasm-lib.wasm to JVM bytecode with the endive build-time compiler.'
+    description = 'Compiles slang-wasm-wasi.wasm to JVM bytecode with the endive build-time compiler.'
     doFirst {
         if (!wasmFile.exists()) {
             throw new GradleException(
-                    "slang-wasm-lib.wasm not found at ${wasmFile} — see stageWasmForAnnotationProcessor.")
+                    "slang-wasm-wasi.wasm not found at ${wasmFile} — see stageWasmForAnnotationProcessor.")
         }
     }
     // inputs.files (not .file) so a missing wasm reaches the friendly doFirst error.
@@ -92,7 +92,7 @@ def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaEx
     maxHeapSize = '10g'
     jvmArgs '-Xss256m'
     args wasmFile.absolutePath,
-            '--prefix', 'org.shaderslang.wasm.SlangWasmModule',
+            '--prefix', 'io.github.refux.slangwasm.SlangWasmModule',
             '--source-dir', endiveGeneratedSources.get().asFile.absolutePath,
             '--class-dir', endiveGeneratedClasses.get().asFile.absolutePath,
             '--wasm-dir', endiveGeneratedClasses.get().asFile.absolutePath,
@@ -127,8 +127,8 @@ dependencies {
     // while compiling, so it is compileOnly.
     compileOnly "run.endive:annotations:$endiveVersion"
     annotationProcessor "run.endive:annotations-processor:$endiveVersion"
-    // Put the staged slang-wasm-lib.wasm on the annotation processor path so the
-    // classpath-name form @WasmModuleInterface("slang-wasm-lib.wasm") resolves
+    // Put the staged slang-wasm-wasi.wasm on the annotation processor path so the
+    // classpath-name form @WasmModuleInterface("slang-wasm-wasi.wasm") resolves
     // it. files(<task>) also wires the build dependency on the staging task.
     annotationProcessor files(stageWasmForAnnotationProcessor)
 

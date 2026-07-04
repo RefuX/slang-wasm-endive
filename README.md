@@ -9,7 +9,7 @@ compiler for the JVM).
 
 ## How it works
 
-`slang-wasm-lib.wasm` — a build of the Slang compiler to WebAssembly — is executed in-process
+`slang-wasm-wasi.wasm` — a build of the Slang compiler to WebAssembly — is executed in-process
 using endive. Three execution modes are available:
 
 - **Build-time compiled** (default): endive's build-time compiler translates the module to JVM
@@ -26,16 +26,16 @@ using endive. Three execution modes are available:
   shader compiles are roughly an order of magnitude slower.
 
 At compile time, an annotation processor (`run.endive:annotations-processor`) reads
-`slang-wasm-lib.wasm` and generates typed Java wrappers for its exports (see
-[SlangWasm.java](src/main/java/org/shaderslang/wasm/SlangWasm.java)), so callers never touch raw
+`slang-wasm-wasi.wasm` and generates typed Java wrappers for its exports (see
+[SlangWasm.java](src/main/java/io/github/refux/slangwasm/SlangWasm.java)), so callers never touch raw
 WASM exports or memory pointers directly.
 
 ## Requirements
 
 - JDK 11+
-- The `slang-wasm-lib.wasm` artifact, built from the Slang compiler's CMake project:
+- The `slang-wasm-wasi.wasm` artifact, built from the Slang compiler's CMake project:
   ```
-  cmake --build --preset slang-wasm-lib
+  cmake --build --preset slang-wasm-wasi
   ```
   This repository does not build that artifact itself; it only consumes it.
 - A locally-published build of the `run.endive` fork this project depends on (see
@@ -54,17 +54,17 @@ cd /path/to/endive
 ./mvnw -DskipTests -pl compiler,runtime,wasi,dircache,annotations/processor,build-time-compiler-cli -am install
 ```
 
-Then point this build at your `slang-wasm-lib.wasm` artifact, either via a Gradle project property
+Then point this build at your `slang-wasm-wasi.wasm` artifact, either via a Gradle project property
 or an environment variable:
 
 ```
-./gradlew build -Pslang.wasm.path=/path/to/slang-wasm-lib.wasm
+./gradlew build -Pslang.wasm.path=/path/to/slang-wasm-wasi.wasm
 # or
-export SLANG_WASM_PATH=/path/to/slang-wasm-lib.wasm
+export SLANG_WASM_PATH=/path/to/slang-wasm-wasi.wasm
 ./gradlew build
 ```
 
-If neither is set, the build looks for `slang-wasm-lib.wasm` in the project root.
+If neither is set, the build looks for `slang-wasm-wasi.wasm` in the project root.
 
 ## Usage
 
@@ -104,7 +104,7 @@ try (var slang = SlangCompiler.builder()
 
 To pin a SPIR-V version, target a `VulkanVersion` instead of hand-writing the profile string:
 Vulkan minor versions don't map onto SPIR-V minor versions 1:1 (Vulkan 1.3 requires SPIR-V 1.6, not
-`"spirv_1_3"`), so [`VulkanVersion`](src/main/java/org/shaderslang/wasm/VulkanVersion.java) carries
+`"spirv_1_3"`), so [`VulkanVersion`](src/main/java/io/github/refux/slangwasm/VulkanVersion.java) carries
 the correct mapping — `.target(Target.SPIRV, VulkanVersion.VULKAN_1_3)` on the builder (or
 `SlangCompiler.TargetSpec.of(Target, VulkanVersion)` for the multi-target descriptor form).
 
@@ -145,7 +145,7 @@ Beyond one-shot `compile()`, `SlangCompiler.loadModule(...)` parses a module onc
 generic entry points, serialize/deserialize checked IR (to skip re-parsing later), and produce
 declaration and disassembly output. Reflection data is available as JSON
 (`CompileResult.reflectionJson()` / `SlangModule.declReflectionJson()`) and can be parsed into typed
-models under [`org.shaderslang.wasm.reflection`](src/main/java/org/shaderslang/wasm/reflection)
+models under [`io.github.refux.slangwasm.reflection`](src/main/java/io/github/refux/slangwasm/reflection)
 (`ShaderReflection`, `EntryPointReflection`, `TypeLayoutReflection`, `VariableLayoutReflection`,
 `DeclReflection`) — `CompileResult.reflection()` does the `ShaderReflection.parse(reflectionJson())`
 step for you (memoized; throws if the compile didn't succeed).
@@ -190,7 +190,7 @@ val result = slang {
 another target.
 
 `vulkanVersion` pins a SPIR-V version by target Vulkan version instead of a hand-written profile
-string, using the Java API's [`VulkanVersion`](src/main/java/org/shaderslang/wasm/VulkanVersion.java)
+string, using the Java API's [`VulkanVersion`](src/main/java/io/github/refux/slangwasm/VulkanVersion.java)
 directly (no Kotlin-side wrapper needed):
 
 ```kotlin
@@ -236,7 +236,7 @@ slangSession {
 ./gradlew test
 ```
 
-Tests run against the real `slang-wasm-lib.wasm` artifact (located the same way as the main build —
+Tests run against the real `slang-wasm-wasi.wasm` artifact (located the same way as the main build —
 see [Building](#building)) and are skipped, rather than failed, if it isn't present. The Kotlin
 module's tests (`./gradlew :slang-wasm-endive-kotlin:test`) run against the bundled build-time-compiled
 module and need no external wasm file.
