@@ -828,7 +828,7 @@ public final class SlangCompiler implements AutoCloseable {
             int resultHandle;
             try {
                 resultHandle = wasm.slangWasmCompileEntryPoint(
-                        sessionHandle, handle, entryPtr, entryUtf8.length, targetIndex);
+                        handle, entryPtr, entryUtf8.length, targetIndex);
             } finally {
                 wasm.slangWasmFree(entryPtr);
             }
@@ -855,7 +855,7 @@ public final class SlangCompiler implements AutoCloseable {
          * {@link CompileResult}.
          */
         public CompileResult compileAll(int targetIndex) {
-            int resultHandle = wasm.slangWasmCompileModule(sessionHandle, handle, targetIndex);
+            int resultHandle = wasm.slangWasmCompileModule(handle, targetIndex);
             return readCompileResult(resultHandle, "slang_wasm_compile_module");
         }
 
@@ -898,7 +898,7 @@ public final class SlangCompiler implements AutoCloseable {
             int resultHandle;
             try {
                 resultHandle = wasm.slangWasmCompileSpecializedEntryPoint(
-                        sessionHandle, handle, entryPtr, entryUtf8.length,
+                        handle, entryPtr, entryUtf8.length,
                         argsHandle, targetIndex);
             } finally {
                 wasm.slangWasmFree(entryPtr);
