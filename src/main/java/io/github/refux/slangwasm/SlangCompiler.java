@@ -818,17 +818,120 @@ public final class SlangCompiler implements AutoCloseable {
         }
 
         /**
+         * A list of type conformances, bound to this module at creation (mirrors
+         * the eager, module-bound shape of the underlying C ABI. Each {@link #add} call
+         * resolves the pair against this module's own layout immediately and returns
+         * the dispatch ID Slang assigns it — the ID a runtime buffer must write
+         * to select that type's implementation at draw time.
+         * Passed to {@link #compileEntryPoint(String, int, TypeConformances)},
+         * {@link #compileAll(int, TypeConformances)}, or
+         * {@link #compileSpecialized(String, List, int, TypeConformances)} to
+         * control which concrete types are linked into an interface's
+         * dynamic-dispatch table for that compile, instead of leaving it to
+         * Slang's own discovery (which only finds types statically reachable in
+         * the module's source — see the C header for when that does not hold).
+         * {@code AutoCloseable}: release with {@link #close()} once no more
+         * compiles need it.
+         */
+        public final class TypeConformances implements AutoCloseable {
+            private final int handle;
+
+            private TypeConformances(int handle) {
+                this.handle = handle;
+            }
+
+            /**
+             * Resolve {@code concreteType} and {@code interfaceType} against this
+             * module's layout and register that the former conforms to the
+             * latter, letting Slang auto-assign the dispatch ID.
+             *
+             * @throws IllegalArgumentException if either name cannot be resolved,
+             *                                  or {@code concreteType} does not
+             *                                  conform to {@code interfaceType}
+             */
+            public int add(String concreteType, String interfaceType) {
+                return add(concreteType, interfaceType, -1);
+            }
+
+            /**
+             * As {@link #add(String, String)}, but pins the dispatch ID to
+             * {@code idOverride} instead of letting Slang auto-assign it.
+             *
+             * @throws IllegalArgumentException if either name cannot be resolved,
+             *                                  or {@code concreteType} does not
+             *                                  conform to {@code interfaceType}
+             */
+            public int add(String concreteType, String interfaceType, int idOverride) {
+                byte[] concreteUtf8 = concreteType.getBytes(StandardCharsets.UTF_8);
+                byte[] interfaceUtf8 = interfaceType.getBytes(StandardCharsets.UTF_8);
+                int concretePtr = allocAndWrite(wasm, concreteUtf8);
+                int interfacePtr = allocAndWrite(wasm, interfaceUtf8);
+                int assignedId;
+                try {
+                    assignedId = wasm.slangWasmTypeConformancesAdd(
+                            handle, concretePtr, concreteUtf8.length,
+                            interfacePtr, interfaceUtf8.length, idOverride);
+                } finally {
+                    wasm.slangWasmFree(concretePtr);
+                    wasm.slangWasmFree(interfacePtr);
+                }
+                if (assignedId < 0) {
+                    throw new IllegalArgumentException(
+                            "\"" + concreteType + "\" does not resolve as a conformance to \""
+                            + interfaceType + "\" (unknown type/interface, or no conformance)");
+                }
+                return assignedId;
+            }
+
+            @Override
+            public void close() {
+                wasm.slangWasmTypeConformancesDestroy(handle);
+            }
+        }
+
+        /**
+         * Create an empty list of type conformances bound to this module. Unlike
+         * {@link SpecializationArg} (whose type-name resolution needs a specific
+         * entry point's generic-parameter shape, so is deferred to compile time),
+         * conformances resolve eagerly: an interface conformance only depends on
+         * the module's own type declarations, which don't vary by target.
+         *
+         * @throws IllegalStateException if the underlying module handle is
+         *                                unexpectedly invalid
+         */
+        public TypeConformances createTypeConformances() {
+            int conformanceHandle = wasm.slangWasmTypeConformancesCreate(handle);
+            if (conformanceHandle == 0) {
+                throw new IllegalStateException("slang_wasm_type_conformances_create failed");
+            }
+            return new TypeConformances(conformanceHandle);
+        }
+
+        /**
          * Compile entry point {@code entryPoint} from this module, producing code
          * for the target at {@code targetIndex}. Never throws for compile errors:
          * errors are captured in the returned {@link CompileResult}.
          */
         public CompileResult compileEntryPoint(String entryPoint, int targetIndex) {
+            return compileEntryPoint(entryPoint, targetIndex, null);
+        }
+
+        /**
+         * As {@link #compileEntryPoint(String, int)}, but linking in only the
+         * concrete types registered in {@code typeConformances} for each
+         * interface's dynamic-dispatch table, instead of leaving it to Slang's
+         * own discovery. {@code typeConformances} may be null, equivalent to
+         * {@link #compileEntryPoint(String, int)}.
+         */
+        public CompileResult compileEntryPoint(
+                String entryPoint, int targetIndex, TypeConformances typeConformances) {
             byte[] entryUtf8 = entryPoint.getBytes(StandardCharsets.UTF_8);
             int entryPtr = allocAndWrite(wasm, entryUtf8);
             int resultHandle;
             try {
                 resultHandle = wasm.slangWasmCompileEntryPoint(
-                        handle, entryPtr, entryUtf8.length, targetIndex);
+                        handle, entryPtr, entryUtf8.length, targetIndex,
+                        typeConformances == null ? 0 : typeConformances.handle);
             } finally {
                 wasm.slangWasmFree(entryPtr);
             }
@@ -844,7 +947,20 @@ public final class SlangCompiler implements AutoCloseable {
          *                                  session's configured targets
          */
         public CompileResult compileEntryPoint(String entryPoint, Target target) {
-            return compileEntryPoint(entryPoint, targetIndexOf(target));
+            return compileEntryPoint(entryPoint, targetIndexOf(target), null);
+        }
+
+        /**
+         * As {@link #compileEntryPoint(String, Target)}, but with an explicit
+         * {@link TypeConformances} list (see
+         * {@link #compileEntryPoint(String, int, TypeConformances)}).
+         *
+         * @throws IllegalArgumentException if {@code target} is not one of this
+         *                                  session's configured targets
+         */
+        public CompileResult compileEntryPoint(
+                String entryPoint, Target target, TypeConformances typeConformances) {
+            return compileEntryPoint(entryPoint, targetIndexOf(target), typeConformances);
         }
 
         /**
@@ -855,7 +971,19 @@ public final class SlangCompiler implements AutoCloseable {
          * {@link CompileResult}.
          */
         public CompileResult compileAll(int targetIndex) {
-            int resultHandle = wasm.slangWasmCompileModule(handle, targetIndex);
+            return compileAll(targetIndex, null);
+        }
+
+        /**
+         * As {@link #compileAll(int)}, but linking in only the concrete types
+         * registered in {@code typeConformances} for each interface's
+         * dynamic-dispatch table, instead of leaving it to Slang's own
+         * discovery. {@code typeConformances} may be null, equivalent to
+         * {@link #compileAll(int)}.
+         */
+        public CompileResult compileAll(int targetIndex, TypeConformances typeConformances) {
+            int resultHandle = wasm.slangWasmCompileModule(
+                    handle, targetIndex, typeConformances == null ? 0 : typeConformances.handle);
             return readCompileResult(resultHandle, "slang_wasm_compile_module");
         }
 
@@ -867,7 +995,18 @@ public final class SlangCompiler implements AutoCloseable {
          *                                  session's configured targets
          */
         public CompileResult compileAll(Target target) {
-            return compileAll(targetIndexOf(target));
+            return compileAll(targetIndexOf(target), null);
+        }
+
+        /**
+         * As {@link #compileAll(Target)}, but with an explicit
+         * {@link TypeConformances} list (see {@link #compileAll(int, TypeConformances)}).
+         *
+         * @throws IllegalArgumentException if {@code target} is not one of this
+         *                                  session's configured targets
+         */
+        public CompileResult compileAll(Target target, TypeConformances typeConformances) {
+            return compileAll(targetIndexOf(target), typeConformances);
         }
 
         /**
@@ -880,6 +1019,19 @@ public final class SlangCompiler implements AutoCloseable {
          */
         public CompileResult compileSpecialized(
                 String entryPoint, List<SpecializationArg> args, int targetIndex) {
+            return compileSpecialized(entryPoint, args, targetIndex, null);
+        }
+
+        /**
+         * As {@link #compileSpecialized(String, List, int)}, but linking in only
+         * the concrete types registered in {@code typeConformances} for each
+         * interface's dynamic-dispatch table, instead of leaving it to Slang's
+         * own discovery. {@code typeConformances} may be null, equivalent to
+         * {@link #compileSpecialized(String, List, int)}.
+         */
+        public CompileResult compileSpecialized(
+                String entryPoint, List<SpecializationArg> args, int targetIndex,
+                TypeConformances typeConformances) {
             byte[] entryUtf8 = entryPoint.getBytes(StandardCharsets.UTF_8);
             int entryPtr = allocAndWrite(wasm, entryUtf8);
 
@@ -899,7 +1051,8 @@ public final class SlangCompiler implements AutoCloseable {
             try {
                 resultHandle = wasm.slangWasmCompileSpecializedEntryPoint(
                         handle, entryPtr, entryUtf8.length,
-                        argsHandle, targetIndex);
+                        argsHandle, targetIndex,
+                        typeConformances == null ? 0 : typeConformances.handle);
             } finally {
                 wasm.slangWasmFree(entryPtr);
             }
@@ -916,7 +1069,21 @@ public final class SlangCompiler implements AutoCloseable {
          */
         public CompileResult compileSpecialized(
                 String entryPoint, List<SpecializationArg> args, Target target) {
-            return compileSpecialized(entryPoint, args, targetIndexOf(target));
+            return compileSpecialized(entryPoint, args, targetIndexOf(target), null);
+        }
+
+        /**
+         * As {@link #compileSpecialized(String, List, Target)}, but with an
+         * explicit {@link TypeConformances} list (see
+         * {@link #compileSpecialized(String, List, int, TypeConformances)}).
+         *
+         * @throws IllegalArgumentException if {@code target} is not one of this
+         *                                  session's configured targets
+         */
+        public CompileResult compileSpecialized(
+                String entryPoint, List<SpecializationArg> args, Target target,
+                TypeConformances typeConformances) {
+            return compileSpecialized(entryPoint, args, targetIndexOf(target), typeConformances);
         }
 
         /**

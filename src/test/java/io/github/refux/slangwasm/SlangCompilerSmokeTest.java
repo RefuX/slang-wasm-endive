@@ -650,6 +650,86 @@ class SlangCompilerSmokeTest {
         }
     }
 
+    // ── Type conformance ───────────────────────────────────────────────────────
+
+    private static final String TYPE_CONFORMANCE_SOURCE =
+            "interface IMaterial { int apply(int x); }\n"
+            + "struct AMaterial : IMaterial { int apply(int x) { return x + 1; } }\n"
+            + "struct BMaterial : IMaterial { int apply(int x) { return x + 2; } }\n"
+            + "struct CMaterial : IMaterial { int apply(int x) { return x + 3; } }\n"
+            + "ParameterBlock<IMaterial> material;\n"
+            + "RWStructuredBuffer<int> output;\n"
+            + "[shader(\"compute\")] [numthreads(1,1,1)]\n"
+            + "void main(uint3 tid : SV_DispatchThreadID) {\n"
+            + "    output[tid.x] = material.apply((int)tid.x);\n"
+            + "}";
+
+    @Test
+    void trimmingTypeConformancesProducesDistinctBinaries() throws Exception {
+        try (var slang = shared.forSpirv();
+             var module = slang.loadModule("type-conformance", TYPE_CONFORMANCE_SOURCE)) {
+
+            CompileResult fullResult;
+            try (var full = module.createTypeConformances()) {
+                int aId = full.add("AMaterial", "IMaterial");
+                int bId = full.add("BMaterial", "IMaterial");
+                int cId = full.add("CMaterial", "IMaterial");
+                assertTrue(aId >= 0 && bId >= 0 && cId >= 0,
+                        "Expected non-negative dispatch IDs for all three materials");
+
+                fullResult = module.compileEntryPoint("main", 0, full);
+                assertTrue(fullResult.succeeded(),
+                        "Expected full-conformance compile to succeed. Diagnostics:\n"
+                        + fullResult.diagnostics());
+                assertTrue(fullResult.code().length > 0,
+                        "Expected non-empty SPIR-V for full conformances");
+            }
+
+            try (var trimmed = module.createTypeConformances()) {
+                trimmed.add("AMaterial", "IMaterial");
+                trimmed.add("BMaterial", "IMaterial");
+
+                CompileResult trimmedResult = module.compileEntryPoint("main", 0, trimmed);
+                assertTrue(trimmedResult.succeeded(),
+                        "Expected trimmed-conformance compile to succeed. Diagnostics:\n"
+                        + trimmedResult.diagnostics());
+                assertTrue(trimmedResult.code().length > 0,
+                        "Expected non-empty SPIR-V for trimmed conformances");
+
+                assertFalse(Arrays.equals(fullResult.code(), trimmedResult.code()),
+                        "Expected trimming type conformances to produce a distinct SPIR-V binary");
+            }
+        }
+    }
+
+    @Test
+    void compilingWithNoExplicitTypeConformancesFails() throws Exception {
+        try (var slang = shared.forSpirv();
+             var module = slang.loadModule("type-conformance-none", TYPE_CONFORMANCE_SOURCE)) {
+
+            // The existing no-conformances overload must still work unchanged
+            // (the additive-overload guarantee from this feature's design) --
+            // it just fails here because this fixture's interface has nothing
+            // for Slang to discover on its own.
+            CompileResult result = module.compileEntryPoint("main", 0);
+            assertFalse(result.succeeded(),
+                    "Expected compiling a ParameterBlock<IMaterial> module with no explicit "
+                    + "conformances to fail (Slang has nothing to discover on its own)");
+        }
+    }
+
+    @Test
+    void addingAnUnresolvableTypeConformanceThrows() throws Exception {
+        try (var slang = shared.forSpirv();
+             var module = slang.loadModule("type-conformance-bad", TYPE_CONFORMANCE_SOURCE);
+             var conformances = module.createTypeConformances()) {
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> conformances.add("NoSuchMaterial", "IMaterial"),
+                    "Expected an unresolvable concrete type to throw IllegalArgumentException");
+        }
+    }
+
     // ── Module-level declaration reflection (DeclReflection) ──────────────────
 
     @Test
