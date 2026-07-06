@@ -866,19 +866,25 @@ public final class SlangCompiler implements AutoCloseable {
                 byte[] interfaceUtf8 = interfaceType.getBytes(StandardCharsets.UTF_8);
                 int concretePtr = allocAndWrite(wasm, concreteUtf8);
                 int interfacePtr = allocAndWrite(wasm, interfaceUtf8);
+                int diagOut = allocAndWrite(wasm, new byte[8]);
+                int diagPtrAddr = diagOut;
+                int diagLenAddr = diagOut + 4;
                 int assignedId;
                 try {
                     assignedId = wasm.slangWasmTypeConformancesAdd(
                             handle, concretePtr, concreteUtf8.length,
-                            interfacePtr, interfaceUtf8.length, idOverride);
+                            interfacePtr, interfaceUtf8.length, idOverride,
+                            diagPtrAddr, diagLenAddr);
                 } finally {
                     wasm.slangWasmFree(concretePtr);
                     wasm.slangWasmFree(interfacePtr);
                 }
+                String diagnostics = readAndFreeDiagOut(diagOut);
                 if (assignedId < 0) {
                     throw new IllegalArgumentException(
                             "\"" + concreteType + "\" does not resolve as a conformance to \""
-                            + interfaceType + "\" (unknown type/interface, or no conformance)");
+                            + interfaceType + "\" (unknown type/interface, or no conformance)"
+                            + (diagnostics.isEmpty() ? "" : ". Diagnostics:\n" + diagnostics));
                 }
                 return assignedId;
             }
