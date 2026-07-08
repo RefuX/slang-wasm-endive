@@ -72,6 +72,7 @@ def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaEx
     classpath = configurations.endiveBuildTimeCompiler
     mainClass = 'run.endive.experimental.compiler.cli.Cli'
     maxHeapSize = '2g'
+    jvmArgs '-Xss256m'
     args wasmFile.absolutePath,
             '--prefix', 'io.github.refux.slangwasm.SlangWasmModule',
             '--source-dir', endiveGeneratedSources.get().asFile.absolutePath,
@@ -118,6 +119,7 @@ test {
     useJUnitPlatform()
 
     maxHeapSize = '2g'
+    jvmArgs '-Xss256m'
 
     systemProperty 'slang.wasm.path', wasmFile.absolutePath
 }
