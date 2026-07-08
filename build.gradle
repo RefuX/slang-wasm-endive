@@ -110,8 +110,8 @@ jar {
 }
 
 tasks.named('compileJava') {
-    fork = true
-    memoryMaximumSize = '2g'
+    options.fork = true
+    options.forkOptions.memoryMaximumSize = '2g'
 }
 
 test {
