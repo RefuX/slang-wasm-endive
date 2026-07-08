@@ -1,10 +1,13 @@
 plugins {
     id 'java'
+    // Applied (not used) at the root so the Kotlin module's publish plugin can
+    // access Kotlin plugin classes from the shared build classpath.
+    id 'org.jetbrains.kotlin.jvm' apply false
+    id 'com.vanniktech.maven.publish'
 }
 
 group = 'io.github.refux'
-// Not yet published to Maven; bump and drop -SNAPSHOT for the first real release.
-version = '0.0.1-SNAPSHOT'
+version = '0.0.1'
 
 def endiveVersion = '1.0.1'
 
@@ -21,9 +24,7 @@ repositories {
 
 // The slang-wasm-wasi.wasm artifact. @WasmModuleInterface reads this at COMPILE
 // TIME to generate the typed export/import wrappers (SlangWasm_ModuleExports
-// etc.), and the tests load it at run time. It is produced by the CMake build
-// (cmake --build --preset slang-wasm-wasi). Override the location with
-// -Pslang.wasm.path=... or the SLANG_WASM_PATH environment variable.
+// etc.)
 def wasmFile = file(project.findProperty('slang.wasm.path')
         ?: System.getenv('SLANG_WASM_PATH')
         ?: "${rootProject.projectDir}/slang-wasm-wasi.wasm")
@@ -49,16 +50,6 @@ def stageWasmForAnnotationProcessor = tasks.register('stageWasmForAnnotationProc
 }
 
 // ── Build-time compilation of the WASM to JVM bytecode ──────────────────────
-// endive's build-time compiler translates slang-wasm-wasi.wasm into Machine
-// classes once, at build time, so instances start with zero JIT cost. It emits:
-//   - classes dir:  the compiled *Machine .class files
-//   - sources dir:  SlangWasmModule.java, a CompiledModule facade over them
-//   - classes dir/…/SlangWasmModule.meta: the module with the bodies of
-//     compiled functions stripped out, parsed at runtime instead of the full wasm
-// A few very large Slang functions exceed the JVM method-size limit and cannot
-// be compiled; --interpreter-fallback WARN leaves them interpreted (their
-// bodies stay intact in the .meta module) and logs one warning per function
-// instead of failing the build.
 def endiveGeneratedSources = layout.buildDirectory.dir('generated/endive/sources')
 def endiveGeneratedClasses = layout.buildDirectory.dir('generated/endive/classes')
 
@@ -80,12 +71,7 @@ def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaEx
     outputs.dir(endiveGeneratedClasses)
     classpath = configurations.endiveBuildTimeCompiler
     mainClass = 'run.endive.experimental.compiler.cli.Cli'
-    // Compiling the ~150k-function module needs a large heap, like the
-    // annotation processor below. A few functions have exception-handler chains
-    // deep enough that ASM's Handler.removeRange recurses past the default
-    // thread stack (StackOverflowError), so raise -Xss too.
-    maxHeapSize = '10g'
-    jvmArgs '-Xss256m'
+    maxHeapSize = '2g'
     args wasmFile.absolutePath,
             '--prefix', 'io.github.refux.slangwasm.SlangWasmModule',
             '--source-dir', endiveGeneratedSources.get().asFile.absolutePath,
@@ -100,7 +86,6 @@ sourceSets.main.java.srcDir(files(endiveGeneratedSources).builtBy(compileWasmToJ
 def endiveCompiledModule = files(endiveGeneratedClasses).builtBy(compileWasmToJvmBytecode)
 
 dependencies {
-    // The endive build-time compiler CLI, run by compileWasmToJvmBytecode.
     endiveBuildTimeCompiler "run.endive:build-time-compiler-cli-experimental:$endiveVersion"
 
     // The build-time-compiled Machine classes + .meta module (compile classpath:
@@ -109,22 +94,11 @@ dependencies {
 
     implementation "run.endive:runtime:$endiveVersion"
     implementation "run.endive:wasi:$endiveVersion"
-    // Optional runtime compiler (compiles the WASM to JVM bytecode for much
-    // faster execution). Only exercised when SlangRuntime.withRuntimeCompiler is on.
     implementation "run.endive:compiler:$endiveVersion"
-    // Disk-backed cache for the runtime compiler's output, so the JIT'd JVM
-    // bytecode survives across process restarts. Only exercised when
-    // SlangRuntime.withCacheDir is set.
     implementation "run.endive:dircache-experimental:$endiveVersion"
 
-    // The @WasmModuleInterface annotation and the processor that turns the wasm
-    // into typed binding classes at compile time. The annotation is only needed
-    // while compiling, so it is compileOnly.
     compileOnly "run.endive:annotations:$endiveVersion"
     annotationProcessor "run.endive:annotations-processor:$endiveVersion"
-    // Put the staged slang-wasm-wasi.wasm on the annotation processor path so the
-    // classpath-name form @WasmModuleInterface("slang-wasm-wasi.wasm") resolves
-    // it. files(<task>) also wires the build dependency on the staging task.
     annotationProcessor files(stageWasmForAnnotationProcessor)
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
@@ -132,28 +106,60 @@ dependencies {
 }
 
 jar {
-    // Ship the build-time-compiled Machine classes and the .meta module.
     from endiveCompiledModule
 }
 
 tasks.named('compileJava') {
-    // Parsing the wasm during annotation processing needs a large heap,
-    // so fork javac into its own process with a generous memory ceiling.
-    options.fork = true
-    options.forkOptions.jvmArgs += ['-Xmx8g']
+    fork = true
+    memoryMaximumSize = '2g'
 }
 
 test {
     useJUnitPlatform()
 
-    // The tests share one runtime-compiled instance; eager-compiling the
-    // module to JVM bytecode needs significant heap. Some functions have
-    // exception-handler chains deep enough that ASM's Handler.removeRange
-    // recurses past the default thread stack (StackOverflowError on platforms
-    // with a small default, e.g. Linux CI runners) — see the same fix on
-    // compileWasmToJvmBytecode above.
-    jvmArgs '-Xmx10g', '-Xss256m'
+    maxHeapSize = '2g'
 
-    // Point tests at the same WASM artifact resolved above.
     systemProperty 'slang.wasm.path', wasmFile.absolutePath
+}
+
+// The -javadoc.jar Maven Central requires is generated over the endive-generated
+// SlangWasmModule facade and the checked-in enums.* — disable doclint so those
+// generated sources can't fail the release build on style/reference lint.
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+// ── Maven Central publishing (com.vanniktech.maven.publish) ─────────────────
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+
+    pom {
+        name = 'slang-wasm-endive'
+        description = 'Pure-JVM library for the Slang shader compiler: compile, reflect on, and ' +
+                'serialize Slang shaders with no JNI and no native binary, by running the Slang ' +
+                'WASM build in-process on the endive runtime.'
+        inceptionYear = '2026'
+        url = 'https://github.com/RefuX/slang-wasm-endive'
+        licenses {
+            license {
+                name = 'The Apache License, Version 2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+            }
+        }
+        developers {
+            developer {
+                id = 'RefuX'
+                name = 'James Roome'
+                url = 'https://github.com/RefuX'
+            }
+        }
+        scm {
+            url = 'https://github.com/RefuX/slang-wasm-endive'
+            connection = 'scm:git:git://github.com/RefuX/slang-wasm-endive.git'
+            developerConnection = 'scm:git:ssh://git@github.com/RefuX/slang-wasm-endive.git'
+        }
+    }
 }

@@ -107,3 +107,14 @@ Package root `io.github.refux.slangwasm`:
 
 `.github/workflows/ci.yml` (JDK 25): checks out the repo and runs `./gradlew build`, resolving
 `run.endive:*:1.0.1` from Maven Central. Uploads test reports on failure and both jars always.
+
+## Releasing (Maven Central + GitHub Release)
+
+Publishing is automated by `.github/workflows/release.yml`, triggered by pushing a `v<version>` tag.
+It runs `./gradlew publishAndReleaseToMavenCentral` (the `com.vanniktech.maven.publish` plugin →
+Sonatype **Central Portal**, auto-released) and then creates the GitHub Release with both jars
+attached. `slang-wasm-wasi.wasm` is **committed to the repo**, so the runner has it on checkout.
+
+To cut a release: set `version` in `build.gradle` to the release version (no `-SNAPSHOT`; the Kotlin
+module tracks it), commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The tag must match
+`version`.

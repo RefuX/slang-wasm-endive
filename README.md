@@ -30,6 +30,48 @@ At compile time, an annotation processor (`run.endive:annotations-processor`) re
 [SlangWasm.java](src/main/java/io/github/refux/slangwasm/SlangWasm.java)), so callers never touch raw
 WASM exports or memory pointers directly.
 
+## Installation
+
+Published to Maven Central under the `io.github.refux` group (requires JDK 11+):
+
+| Artifact | Coordinates |
+| --- | --- |
+| Java library | `io.github.refux:slang-wasm-endive:0.0.1` |
+| Kotlin DSL (optional) | `io.github.refux:slang-wasm-endive-kotlin:0.0.1` |
+
+Gradle (Kotlin DSL):
+
+```kotlin
+dependencies {
+    implementation("io.github.refux:slang-wasm-endive:0.0.1")
+    // optional Kotlin DSL — pulls in the Java library transitively
+    implementation("io.github.refux:slang-wasm-endive-kotlin:0.0.1")
+}
+```
+
+Gradle (Groovy DSL):
+
+```groovy
+dependencies {
+    implementation 'io.github.refux:slang-wasm-endive:0.0.1'
+    // optional Kotlin DSL — pulls in the Java library transitively
+    implementation 'io.github.refux:slang-wasm-endive-kotlin:0.0.1'
+}
+```
+
+Maven:
+
+```xml
+<dependency>
+  <groupId>io.github.refux</groupId>
+  <artifactId>slang-wasm-endive</artifactId>
+  <version>0.0.1</version>
+</dependency>
+```
+
+The published jar bundles the build-time-compiled Slang module, so no `slang-wasm-wasi.wasm` file is
+needed at run time. Building from source (below) is only required to regenerate that bundled module.
+
 ## Requirements
 
 - JDK 11+

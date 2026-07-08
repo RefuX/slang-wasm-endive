@@ -1,0 +1,51 @@
+name: Release
+
+# Push a tag like v0.0.1 to release. This publishes both jars to Maven Central
+# (auto-released, no manual Portal step) and creates the matching GitHub Release.
+# The tag must match the `version` in build.gradle (e.g. tag v0.0.1 → version 0.0.1).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out slang-wasm-endive
+        uses: actions/checkout@v7
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Publishes the root + Kotlin artifacts to the Sonatype Central Portal and
+      # releases them automatically. slang-wasm-wasi.wasm is committed to the repo,
+      # so the annotation processor and build-time compiler find it via the default
+      # project-root lookup — no wasm-fetching step needed.
+      - name: Publish to Maven Central
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --stacktrace
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          --title "${GITHUB_REF_NAME}"
+          --generate-notes
+          build/libs/*.jar
+          slang-wasm-endive-kotlin/build/libs/*.jar

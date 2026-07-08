@@ -1,3 +1,19 @@
+pluginManagement {
+    // Declare plugin versions once here so the root and the Kotlin module can
+    // apply them without a version (applying the same versioned plugin in two
+    // sibling build scripts otherwise conflicts). The Kotlin plugin is also
+    // applied `apply false` at the root so the publish plugin — applied in the
+    // Kotlin module — can detect the Kotlin version from the shared classpath.
+    plugins {
+        id 'org.jetbrains.kotlin.jvm' version '2.3.21'
+        id 'com.vanniktech.maven.publish' version '0.37.0'
+    }
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 rootProject.name = 'slang-wasm-endive'
 
 include 'slang-wasm-endive-kotlin'
