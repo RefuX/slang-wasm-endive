@@ -20,7 +20,9 @@ import io.github.refux.slangwasm.reflection.VariableLayoutReflection;
 
 import run.endive.compiler.Cache;
 import run.endive.experimental.dircache.DirectoryCache;
+import run.endive.wasi.WasiOptions;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -390,6 +392,33 @@ class SlangCompilerSmokeTest {
             CompileResult result = slang.compile("bundled", TRIVIAL_SHADER, "main");
             assertTrue(result.succeeded(),
                     "Expected compile on the bundled module to succeed. Diagnostics:\n"
+                    + result.diagnostics());
+            assertTrue(result.code().length > 0, "Expected non-empty SPIR-V");
+        }
+    }
+
+    // ── WASI options (custom stdio) ──────────────────────────────────
+
+    @Test
+    void wasiOptionsRouteStdioToCallerStreams() throws Exception {
+        // Embedders can supply their own WasiOptions so the module's console
+        // chatter lands in their streams (e.g. a logging adapter) instead of
+        // System.out/System.err. The runtime still creates and owns (closes)
+        // the WASI layer built from them, so this just proves a runtime built
+        // on caller-supplied options works end-to-end.
+        var stdout = new ByteArrayOutputStream();
+        var stderr = new ByteArrayOutputStream();
+        try (var runtime = SlangRuntime.builder()
+                .withWasiOptions(WasiOptions.builder()
+                        .withStdout(stdout)
+                        .withStderr(stderr)
+                        .build())
+                .build();
+             var slang = runtime.forSpirv()) {
+
+            CompileResult result = slang.compile("custom-wasi", TRIVIAL_SHADER, "main");
+            assertTrue(result.succeeded(),
+                    "Expected compile on a custom-WASI runtime to succeed. Diagnostics:\n"
                     + result.diagnostics());
             assertTrue(result.code().length > 0, "Expected non-empty SPIR-V");
         }

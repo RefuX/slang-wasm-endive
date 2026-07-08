@@ -87,8 +87,8 @@ inline fun slangSession(block: SlangCompiler.SessionBuilder.() -> Unit): SlangCo
  * Build a [SlangRuntime], sharable across any number of sessions opened on it
  * (e.g. via [SlangRuntime.newSession]). Omit [wasmPath] to use the bundled,
  * build-time-compiled module; [block] configures [SlangRuntime.Builder]
- * options such as `withRuntimeCompiler`/`withCacheDir`, which only apply when
- * [wasmPath] is given.
+ * options such as `withWasiOptions` (any module), or
+ * `withRuntimeCompiler`/`withCacheDir` (only apply when [wasmPath] is given).
  *
  * ```kotlin
  * val runtime = slangRuntime(wasmPath) {

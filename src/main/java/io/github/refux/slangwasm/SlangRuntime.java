@@ -64,6 +64,11 @@ import java.util.function.Function;
  * skip compilation entirely. Only meaningful together with
  * {@link Builder#withRuntimeCompiler}.
  *
+ * <p><b>WASI stdio.</b> By default the runtime wires the module's stdout/stderr
+ * to {@link System#out}/{@link System#err}. Embedders that want the compiler's
+ * console chatter elsewhere (e.g. routed into a logging framework) pass their
+ * own streams via {@link Builder#withWasiOptions}.
+ *
  * <p>Not thread-safe: do not share one runtime (or its sessions) across threads.
  */
 public final class SlangRuntime implements AutoCloseable {
@@ -147,6 +152,7 @@ public final class SlangRuntime implements AutoCloseable {
         private final Path wasmPath;
         private boolean runtimeCompiler = false;
         private Cache cache;
+        private WasiOptions wasiOptions;
 
         private Builder(Path wasmPath) {
             this.wasmPath = wasmPath;
@@ -186,25 +192,43 @@ public final class SlangRuntime implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Use {@code wasiOptions} for the WASI layer the runtime creates (stdio
+         * streams, environment, preopened directories, …) instead of the default,
+         * which wires stdout/stderr to {@link System#out}/{@link System#err}.
+         * Lets embedders route the compiler's console chatter into a logging
+         * framework. The runtime still creates and owns the WASI layer —
+         * {@link SlangRuntime#close()} closes it — so the supplied streams must
+         * stay usable for the runtime's lifetime. Applies to both the bundled and
+         * external modules.
+         */
+        public Builder withWasiOptions(WasiOptions wasiOptions) {
+            this.wasiOptions = wasiOptions;
+            return this;
+        }
+
         public SlangRuntime build() throws IOException {
             if (wasmPath == null && (runtimeCompiler || cache != null)) {
                 throw new IllegalStateException(
                         "withRuntimeCompiler/withCache only apply to external modules loaded via "
                         + "builder(Path); the bundled module is already compiled at build time");
             }
-            return instantiate(wasmPath, runtimeCompiler, cache);
+            return instantiate(wasmPath, runtimeCompiler, cache, wasiOptions);
         }
     }
 
     /** Parse, instantiate (optionally with the runtime compiler), and run _initialize. */
     private static SlangRuntime instantiate(
-            Path wasmPath, boolean useCompiler, Cache cache) throws IOException {
+            Path wasmPath, boolean useCompiler, Cache cache, WasiOptions wasiOptions)
+            throws IOException {
 
         var wasi = WasiPreview1.builder()
-                .withOptions(WasiOptions.builder()
-                        .withStdout(System.out)
-                        .withStderr(System.err)
-                        .build())
+                .withOptions(wasiOptions != null
+                        ? wasiOptions
+                        : WasiOptions.builder()
+                                .withStdout(System.out)
+                                .withStderr(System.err)
+                                .build())
                 .build();
 
         Instance instance;

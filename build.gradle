@@ -1,5 +1,5 @@
 plugins {
-    id 'java'
+    id 'java-library'
     // Applied (not used) at the root so the Kotlin module's publish plugin can
     // access Kotlin plugin classes from the shared build classpath.
     id 'org.jetbrains.kotlin.jvm' apply false
@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'io.github.refux'
-version = '0.0.1'
+version = '0.0.2'
 
 def endiveVersion = '1.0.1'
 
@@ -94,7 +94,9 @@ dependencies {
     implementation endiveCompiledModule
 
     implementation "run.endive:runtime:$endiveVersion"
-    implementation "run.endive:wasi:$endiveVersion"
+    // api: WasiOptions appears on SlangRuntime.Builder's public signature
+    // (withWasiOptions), so consumers need it on their compile classpath.
+    api "run.endive:wasi:$endiveVersion"
     implementation "run.endive:compiler:$endiveVersion"
     implementation "run.endive:dircache-experimental:$endiveVersion"
 

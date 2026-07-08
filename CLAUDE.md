@@ -75,8 +75,9 @@ Package root `io.github.refux.slangwasm`:
 - **`SlangWasm`** — non-instantiated anchor carrying `@WasmModuleInterface`; drives binding generation.
 - **`SlangRuntime`** (`AutoCloseable`) — one loaded wasm instance. **Loading it is the expensive
   part**, and it is **not thread-safe** — do not share a runtime or its sessions across threads. Reuse
-  one runtime and open many sessions. Wires WASI stdout/stderr to `System.out`/`System.err` and runs
-  the reactor `_initialize()` before any export.
+  one runtime and open many sessions. Wires WASI stdout/stderr to `System.out`/`System.err` by default
+  (embedders override via `Builder.withWasiOptions` — `run.endive:wasi` is an `api` dependency for
+  this reason) and runs the reactor `_initialize()` before any export.
 - **`SlangCompiler`** (`AutoCloseable`) — one Slang session on a runtime for a target/profile, with
   macros, search paths, and session-wide `CompilerOption`s (optimization/debug/matrix). Factories
   (`forSpirv`, `builder()`, `fromWasm(...)`) create a runtime per call; `SlangRuntime.newSession(...)`
