@@ -38,23 +38,10 @@ WASM exports or memory pointers directly.
   cmake --build --preset slang-wasm-wasi
   ```
   This repository does not build that artifact itself; it only consumes it.
-- A locally-published build of the `run.endive` fork this project depends on (see
-  [Building](#building) below).
 
 ## Building
 
-This project currently builds against a local fork of `endive` (version `999-SNAPSHOT`, set via
-`endiveVersion` in [build.gradle](build.gradle)) rather than an upstream release, because it carries
-fixes needed for the `@WasmModuleInterface` annotation processor. Build and install it (including
-the build-time compiler CLI used by the `compileWasmToJvmBytecode` task) to your local Maven
-repository first:
-
-```
-cd /path/to/endive
-./mvnw -DskipTests -pl compiler,runtime,wasi,dircache,annotations/processor,build-time-compiler-cli -am install
-```
-
-Then point this build at your `slang-wasm-wasi.wasm` artifact, either via a Gradle project property
+Point this build at your `slang-wasm-wasi.wasm` artifact, either via a Gradle project property
 or an environment variable:
 
 ```

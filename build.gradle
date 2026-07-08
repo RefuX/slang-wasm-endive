@@ -6,9 +6,7 @@ group = 'io.github.refux'
 // Not yet published to Maven; bump and drop -SNAPSHOT for the first real release.
 version = '0.0.1-SNAPSHOT'
 
-// The locally-published endive fork (off the 1.0.0 release, carrying the
-// @WasmModuleInterface fixes) — see the mavenLocal() note below.
-def endiveVersion = '999-SNAPSHOT'
+def endiveVersion = '1.0.1'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -18,9 +16,6 @@ java {
 sourceSets.main.java.srcDirs += ['src/generated/java']
 
 repositories {
-    // run.endive:*:$endiveVersion — a fork off the 1.0.0 release carrying the
-    // @WasmModuleInterface fixes — is published to the local Maven repo.
-    mavenLocal()
     mavenCentral()
 }
 

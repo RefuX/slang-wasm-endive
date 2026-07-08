@@ -6,11 +6,11 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$PROJECT_DIR$/build/wasm-annotation-processor" />
-          <entry name="$MAVEN_REPOSITORY$/run/endive/annotations-processor/999-SNAPSHOT/annotations-processor-999-SNAPSHOT.jar" />
-          <entry name="$MAVEN_REPOSITORY$/run/endive/codegen/999-SNAPSHOT/codegen-999-SNAPSHOT.jar" />
-          <entry name="$MAVEN_REPOSITORY$/com/github/javaparser/javaparser-core/3.28.2/javaparser-core-3.28.2.jar" />
-          <entry name="$MAVEN_REPOSITORY$/run/endive/annotations/999-SNAPSHOT/annotations-999-SNAPSHOT.jar" />
-          <entry name="$MAVEN_REPOSITORY$/run/endive/wasm/999-SNAPSHOT/wasm-999-SNAPSHOT.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/run.endive/annotations-processor/1.0.1/41ffe31f79d991ef0d895d39474c2e3d58f29454/annotations-processor-1.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/run.endive/codegen/1.0.1/d16997db3585a958c381e9f36249cc1eda633115/codegen-1.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/com.github.javaparser/javaparser-core/3.28.2/f585a590072b20c6b4be3c35291b6e66a88b995/javaparser-core-3.28.2.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/run.endive/annotations/1.0.1/de6be3fa83251203c2449a7ba830200a0d942917/annotations-1.0.1.jar" />
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/run.endive/wasm/1.0.1/a31e0510179f5919db40b76a9eae8382db450fd3/wasm-1.0.1.jar" />
         </processorPath>
         <module name="slang-wasm-endive.main" />
       </profile>
