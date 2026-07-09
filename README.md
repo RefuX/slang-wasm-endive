@@ -36,16 +36,16 @@ Published to Maven Central under the `io.github.refux` group (requires JDK 11+):
 
 | Artifact | Coordinates |
 | --- | --- |
-| Java library | `io.github.refux:slang-wasm-endive:0.0.2` |
-| Kotlin DSL (optional) | `io.github.refux:slang-wasm-endive-kotlin:0.0.2` |
+| Java library | `io.github.refux:slang-wasm-endive:0.0.3` |
+| Kotlin DSL (optional) | `io.github.refux:slang-wasm-endive-kotlin:0.0.3` |
 
 Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("io.github.refux:slang-wasm-endive:0.0.2")
+    implementation("io.github.refux:slang-wasm-endive:0.0.3")
     // optional Kotlin DSL — pulls in the Java library transitively
-    implementation("io.github.refux:slang-wasm-endive-kotlin:0.0.2")
+    implementation("io.github.refux:slang-wasm-endive-kotlin:0.0.3")
 }
 ```
 
@@ -53,9 +53,9 @@ Gradle (Groovy DSL):
 
 ```groovy
 dependencies {
-    implementation 'io.github.refux:slang-wasm-endive:0.0.2'
+    implementation 'io.github.refux:slang-wasm-endive:0.0.3'
     // optional Kotlin DSL — pulls in the Java library transitively
-    implementation 'io.github.refux:slang-wasm-endive-kotlin:0.0.2'
+    implementation 'io.github.refux:slang-wasm-endive-kotlin:0.0.3'
 }
 ```
 
@@ -65,7 +65,7 @@ Maven:
 <dependency>
   <groupId>io.github.refux</groupId>
   <artifactId>slang-wasm-endive</artifactId>
-  <version>0.0.2</version>
+  <version>0.0.3</version>
 </dependency>
 ```
 

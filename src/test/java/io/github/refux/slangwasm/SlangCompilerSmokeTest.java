@@ -514,6 +514,48 @@ class SlangCompilerSmokeTest {
         }
     }
 
+    @Test
+    void typedReflectionReportsStructuredBufferElementLayoutAndStride() throws Exception {
+        // The consumer story: a per-instance StructuredBuffer<T> whose elements the CPU packs —
+        // T's field offsets and the element stride must come from reflection, not from
+        // re-deriving std430 rules. {float4; float} is the canonical trap: its unpadded size is
+        // 20 bytes but the array stride rounds up to the struct's 16-byte alignment, i.e. 32.
+        String source =
+            "struct FlashData {\n"
+            + "    float4 color;\n"
+            + "    float amount;\n"
+            + "};\n"
+            + "StructuredBuffer<FlashData> gFlash;\n"
+            + "RWStructuredBuffer<float> output;\n"
+            + "[shader(\"compute\")] [numthreads(1,1,1)]\n"
+            + "void main(uint3 tid : SV_DispatchThreadID) {\n"
+            + "    output[0] = gFlash[tid.x].color.x * gFlash[tid.x].amount;\n"
+            + "}";
+
+        try (var slang = shared.forSpirv()) {
+            CompileResult result = slang.compile("structured-buffer-layout", source, "main");
+            assertTrue(result.succeeded(),
+                    "Expected compilation to succeed. Diagnostics:\n" + result.diagnostics());
+
+            VariableLayoutReflection gFlash = result.reflection().find("gFlash")
+                    .orElseThrow(() -> new AssertionError("Expected a parameter named \"gFlash\""));
+
+            TypeLayoutReflection element = gFlash.typeLayout().resultTypeLayout();
+            assertNotNull(element, "Structured buffer must expose its element type layout");
+            assertEquals(TypeKind.STRUCT, element.kind());
+            assertEquals("FlashData", element.name());
+
+            assertEquals(32, element.stride(),
+                    "std430 stride of {float4; float} must round up to 32");
+            assertEquals(32, element.size(),
+                    "a structured-buffer element is laid out at its padded size (== stride)");
+
+            assertEquals(List.of("color", "amount"), element.fieldNames());
+            assertEquals(0, element.fields().get(0).offset(), "color at offset 0");
+            assertEquals(16, element.fields().get(1).offset(), "amount at offset 16");
+        }
+    }
+
     // reflection browsing helpers: find(), dump(), CompileResult.reflection() ─
 
     private static final String CONSTANT_BUFFER_SHADER =

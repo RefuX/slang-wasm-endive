@@ -23,8 +23,11 @@ public final class TypeLayoutReflection {
     private final int rowCount;
     private final int columnCount;
     private final long elementCount;
+    private final long size;
+    private final long stride;
     private final TypeLayoutReflection elementType;
     private final TypeReflection resultType;
+    private final TypeLayoutReflection resultTypeLayout;
     private final List<VariableLayoutReflection> fields;
 
     private TypeLayoutReflection(
@@ -34,8 +37,11 @@ public final class TypeLayoutReflection {
             int rowCount,
             int columnCount,
             long elementCount,
+            long size,
+            long stride,
             TypeLayoutReflection elementType,
             TypeReflection resultType,
+            TypeLayoutReflection resultTypeLayout,
             List<VariableLayoutReflection> fields) {
         this.kind = kind;
         this.name = name;
@@ -43,8 +49,11 @@ public final class TypeLayoutReflection {
         this.rowCount = rowCount;
         this.columnCount = columnCount;
         this.elementCount = elementCount;
+        this.size = size;
+        this.stride = stride;
         this.elementType = elementType;
         this.resultType = resultType;
+        this.resultTypeLayout = resultTypeLayout;
         this.fields = fields;
     }
 
@@ -59,8 +68,11 @@ public final class TypeLayoutReflection {
         int rowCount = (int) getLong(json, "rowCount", 0);
         int columnCount = (int) getLong(json, "columnCount", 0);
         long elementCount = getLong(json, "elementCount", -1);
+        long size = getLong(json, "uniformSize", -1);
+        long stride = getLong(json, "uniformStride", -1);
         TypeLayoutReflection elementType = fromJson(getObject(json, "elementType"));
         TypeReflection resultType = TypeReflection.fromJson(getObject(json, "resultType"));
+        TypeLayoutReflection resultTypeLayout = fromJson(getObject(json, "resultType"));
 
         List<VariableLayoutReflection> fields = new ArrayList<>();
         for (Object fieldObj : getArray(json, "fields")) {
@@ -68,8 +80,8 @@ public final class TypeLayoutReflection {
         }
 
         return new TypeLayoutReflection(
-                kind, name, scalarType, rowCount, columnCount, elementCount, elementType,
-                resultType, fields);
+                kind, name, scalarType, rowCount, columnCount, elementCount, size, stride,
+                elementType, resultType, resultTypeLayout, fields);
     }
 
     /** The kind of type this is (struct, array, scalar, vector, matrix, constantBuffer, resource, ...). */
@@ -103,6 +115,27 @@ public final class TypeLayoutReflection {
     }
 
     /**
+     * The type's uniform-category byte size, for {@link TypeKind#STRUCT}, exactly as the
+     * compiler laid it out in its context — which may include trailing alignment padding (for a
+     * structured-buffer element layout it equals {@link #stride()}). -1 if not reported
+     * (non-struct kinds, or a struct with no uniform data).
+     */
+    public long size() {
+        return size;
+    }
+
+    /**
+     * The type's uniform-category array stride in bytes — {@link #size()} rounded up to the
+     * type's alignment. For a {@code StructuredBuffer<T>} element type layout (see
+     * {@link #resultTypeLayout()}) this is the byte distance between consecutive elements,
+     * exactly as the compiled shader addresses them. Reported for {@link TypeKind#STRUCT} and
+     * {@link TypeKind#ARRAY}; -1 if not reported.
+     */
+    public long stride() {
+        return stride;
+    }
+
+    /**
      * Element type, for {@link TypeKind#ARRAY}, {@link TypeKind#VECTOR}, {@link TypeKind#MATRIX},
      * {@link TypeKind#CONSTANT_BUFFER}, {@link TypeKind#PARAMETER_BLOCK},
      * {@link TypeKind#TEXTURE_BUFFER}, or {@link TypeKind#SHADER_STORAGE_BUFFER} — the type this
@@ -115,11 +148,25 @@ public final class TypeLayoutReflection {
 
     /**
      * The element type of a structured/byte-address buffer {@link TypeKind#RESOURCE}, without
-     * layout (resources don't lay out their element type the way a constant buffer does).
-     * {@code null} for non-resource kinds, or a resource kind that doesn't carry one.
+     * layout. {@code null} for non-resource kinds, or a resource kind that doesn't carry one.
+     * For structured buffers the reflection actually carries the element's full type
+     * <em>layout</em> — use {@link #resultTypeLayout()} to read field offsets and the element
+     * {@link #stride()}.
      */
     public TypeReflection resultType() {
         return resultType;
+    }
+
+    /**
+     * The element type of a {@code StructuredBuffer<T>}/{@code RWStructuredBuffer<T>}
+     * {@link TypeKind#RESOURCE}, <em>with</em> layout: {@code T}'s {@link #fields()} carry their
+     * byte offsets, and {@link #stride()} is the buffer's element stride. {@code null} for
+     * non-resource kinds, or a resource kind that doesn't carry one. (For non-structured-buffer
+     * resources the underlying JSON has no layout information; the returned object then simply
+     * has no offsets/stride.)
+     */
+    public TypeLayoutReflection resultTypeLayout() {
+        return resultTypeLayout;
     }
 
     /** Field layouts, for {@link TypeKind#STRUCT} — each field's name, type, and binding. */
