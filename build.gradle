@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'io.github.refux'
-version = '0.0.3'
+version = '0.0.4'
 
 def endiveVersion = '1.0.1'
 
@@ -86,7 +86,58 @@ def compileWasmToJvmBytecode = tasks.register('compileWasmToJvmBytecode', JavaEx
 sourceSets.main.java.srcDir(files(endiveGeneratedSources).builtBy(compileWasmToJvmBytecode))
 def endiveCompiledModule = files(endiveGeneratedClasses).builtBy(compileWasmToJvmBytecode)
 
+// ── Build-time generation of slang-version.properties ───────────────────────
+// SlangVersion.BUILD_TAG must be readable WITHOUT loading the compiler (it keys
+// persistent caches that want to skip the ~230 MB runtime load on a hit). The
+// only reliable source of the tag is the compiler itself, so run it once at
+// build time and bake the result into a resource. Up-to-date-checked on the
+// wasm, so it only re-runs when the bundled module changes.
+sourceSets {
+    // A tiny generator that runs the compiled runtime; compiled against the main
+    // classes (see the versionTool* dependencies below) but never shipped in the
+    // jar. Its dependencies are declared through the versionToolImplementation
+    // configuration rather than by assigning compileClasspath directly, so the
+    // IDE models the dependency on main and resolves the imports.
+    versionTool
+}
+
+def generatedVersionResources = layout.buildDirectory.dir('generated/slang-version/resources')
+def generateSlangVersion = tasks.register('generateSlangVersion', JavaExec) {
+    description = 'Runs the bundled Slang compiler once and writes its build tag to slang-version.properties.'
+    inputs.files(wasmFile)
+    outputs.dir(generatedVersionResources)
+    classpath = sourceSets.versionTool.runtimeClasspath
+    mainClass = 'io.github.refux.slangwasm.versiontool.GenerateSlangVersion'
+    maxHeapSize = '2g'
+    jvmArgs '-Xss256m'
+    args generatedVersionResources.get().asFile.absolutePath
+}
+
+// Bake the generated tag into the published jar. It is deliberately NOT added to
+// sourceSets.main.resources: the generator's classpath includes the main source
+// set output, so feeding the resource back into main.resources would make
+// processResources depend on generateSlangVersion and vice versa (a cycle). The
+// version guard test gets it via testRuntimeOnly (see dependencies).
+jar {
+    from(files(generatedVersionResources).builtBy(generateSlangVersion))
+}
+
 dependencies {
+    // The generator compiles against the main classes (SlangRuntime/SlangCompiler)
+    // and runs the bundled compiler, so it needs main's output plus the same
+    // endive runtime deps. Declared here (not via a compileClasspath assignment)
+    // so IntelliJ resolves the imports.
+    versionToolImplementation sourceSets.main.output
+    versionToolImplementation "run.endive:runtime:$endiveVersion"
+    versionToolImplementation "run.endive:wasi:$endiveVersion"
+    versionToolImplementation "run.endive:compiler:$endiveVersion"
+    versionToolImplementation "run.endive:dircache-experimental:$endiveVersion"
+    versionToolImplementation endiveCompiledModule
+
+    // Put the generated resource on the test runtime classpath so the version
+    // guard test can read /slang-version.properties.
+    testRuntimeOnly files(generatedVersionResources) { builtBy generateSlangVersion }
+
     endiveBuildTimeCompiler "run.endive:build-time-compiler-cli-experimental:$endiveVersion"
 
     // The build-time-compiled Machine classes + .meta module (compile classpath:

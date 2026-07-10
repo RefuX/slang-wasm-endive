@@ -882,6 +882,18 @@ class SlangCompilerSmokeTest {
     }
 
     @Test
+    void staticBuildTagMatchesRuntimeVersion() throws Exception {
+        try (var slang = shared.forSpirv()) {
+            assertEquals(
+                    slang.version(),
+                    SlangVersion.BUILD_TAG,
+                    "SlangVersion.BUILD_TAG is out of sync with the bundled wasm. Update it to the "
+                            + "value printed by versionStringIsNonEmpty so callers can read the compiler "
+                            + "build without loading the runtime.");
+        }
+    }
+
+    @Test
     void cacheDirSkipsRecompilationAndIsSharedAcrossBothBuilders(@TempDir Path cacheDir)
             throws Exception {
         var cache = new CountingCache(new DirectoryCache(cacheDir));

@@ -34,18 +34,18 @@ WASM exports or memory pointers directly.
 
 Published to Maven Central under the `io.github.refux` group (requires JDK 11+):
 
-| Artifact | Coordinates |
-| --- | --- |
-| Java library | `io.github.refux:slang-wasm-endive:0.0.3` |
-| Kotlin DSL (optional) | `io.github.refux:slang-wasm-endive-kotlin:0.0.3` |
+| Artifact | Coordinates                                      |
+| --- |--------------------------------------------------|
+| Java library | `io.github.refux:slang-wasm-endive:0.0.4`        |
+| Kotlin DSL (optional) | `io.github.refux:slang-wasm-endive-kotlin:0.0.4` |
 
 Gradle (Kotlin DSL):
 
 ```kotlin
 dependencies {
-    implementation("io.github.refux:slang-wasm-endive:0.0.3")
+    implementation("io.github.refux:slang-wasm-endive:0.0.4")
     // optional Kotlin DSL — pulls in the Java library transitively
-    implementation("io.github.refux:slang-wasm-endive-kotlin:0.0.3")
+    implementation("io.github.refux:slang-wasm-endive-kotlin:0.0.4")
 }
 ```
 
@@ -53,9 +53,9 @@ Gradle (Groovy DSL):
 
 ```groovy
 dependencies {
-    implementation 'io.github.refux:slang-wasm-endive:0.0.3'
+    implementation 'io.github.refux:slang-wasm-endive:0.0.4'
     // optional Kotlin DSL — pulls in the Java library transitively
-    implementation 'io.github.refux:slang-wasm-endive-kotlin:0.0.3'
+    implementation 'io.github.refux:slang-wasm-endive-kotlin:0.0.4'
 }
 ```
 
@@ -65,7 +65,7 @@ Maven:
 <dependency>
   <groupId>io.github.refux</groupId>
   <artifactId>slang-wasm-endive</artifactId>
-  <version>0.0.3</version>
+  <version>0.0.4</version>
 </dependency>
 ```
 
@@ -151,6 +151,13 @@ try (var runtime = SlangRuntime.load()) {
     // ... more sessions on the same instance, no re-load ...
 }
 ```
+
+`SlangCompiler.version()` returns the bundled build's Slang tag, but only after loading the module.
+When you just need to *identify* the build — e.g. to key a persistent cache and decide whether to
+load the compiler at all — read `SlangVersion.BUILD_TAG` instead; it holds the same string with no
+runtime instance. It is generated at build time from the bundled wasm (the `generateSlangVersion`
+task runs the compiler once and bakes the tag into a resource), so it can never drift; a test also
+asserts it matches `version()`.
 
 To run an external WASM artifact through the *runtime* compiler instead of the bundled
 build-time-compiled module, use the `Path`-based builder; `withCacheDir` persists the JIT'd
